@@ -1,8 +1,6 @@
-function greet(name: string): string {
-    return `Hello, ${name}!`;
-}
+const appElement = document.getElementById('app');
 
-const app = document.getElementById('app');
-if (app) {
-    app.innerHTML = `<h1>${greet("Roomie Match!")}</h1>`;
+if (appElement) {
+    appElement.innerHTML = `<h1>Roomie Match!</h1>`;
+    console.log('App loaded');
 }
