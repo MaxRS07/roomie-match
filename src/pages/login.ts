@@ -23,7 +23,8 @@ export const LoginPage = {
         document.getElementById('login-as-guest')?.addEventListener('click', () => {
             authenticateUser('dsteynor0@mysql.com', '$2a$04$di9TDfadKUkdFJSlZVZyhO0hDGa42Y1skGrueD9ILj.OHjtqBVI7a').then(result => {
                 if (result.success) {
-                    localStorage.setItem('authToken', 'guest-token');
+                    localStorage.setItem('authToken', String(result.data.user_id));
+                    localStorage.setItem('user:' + result.data.user_id, JSON.stringify(result.data));
                     router.navigate('dashboard');
                 } else {
                     alert('Guest login failed');
@@ -44,7 +45,8 @@ async function handleLogin(e: Event) {
 
     authenticateUser(email, password).then(result => {
         if (result.success) {
-            localStorage.setItem('authToken', 'user-token');
+            localStorage.setItem('authToken', String(result.data.user_id));
+            localStorage.setItem('user:' + result.data.user_id, JSON.stringify(result.data));
             router.navigate('dashboard');
         } else {
             alert('Login failed');

@@ -13,14 +13,6 @@ body {
     min-height: 100vh;
 }
 
-nav {
-    background: white;
-    padding: 1rem;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    display: flex;
-    gap: 1rem;
-}
-
 nav a, nav button {
     padding: 0.5rem 1rem;
     text-decoration: none;
@@ -33,4 +25,20 @@ nav a, nav button {
 nav a:hover, nav button:hover {
     background: #f0f0f0;
     border-radius: 4px;
+}
+
+header {
+    display: flex;
+    height: 60px;
+    padding: 0 1rem;
+    justify-content: space-between;
+    align-items: center;
+    background: white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.profile-img {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
 }

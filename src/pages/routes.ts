@@ -1,4 +1,4 @@
-export type PageName = 'login' | 'dashboard' | 'listings' | 'profile';
+export type PageName = 'login' | 'dashboard' | 'matches' | 'profile' | 'notfound';
 
 interface Page {
     name: PageName;
@@ -20,17 +20,25 @@ class Router {
         const currentPageObj = this.currentPage ? this.pages.get(this.currentPage) : null;
         currentPageObj?.cleanup?.();
 
-        const page = this.pages.get(name);
+        let page = this.pages.get(name);
+        let pageName = name;
+
         if (!page) {
-            console.error(`Page ${name} not found`);
+            console.error(`Page ${name} not found, showing 404`);
+            pageName = 'notfound';
+            page = this.pages.get(pageName);
+        }
+
+        if (!page) {
+            console.error(`Notfound page not registered`);
             return;
         }
 
-        this.currentPage = name;
+        this.currentPage = pageName;
         page.render();
 
         // Update browser history
-        window.history.pushState({ page: name }, '', `/${name}`);
+        window.history.pushState({ page: pageName }, '', `/${pageName}`);
     }
 }
 

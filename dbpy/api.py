@@ -32,9 +32,8 @@ def query(body: dict):
         
         conn = sqlite3.connect(DB_PATH)
         cur = conn.cursor()
-        print(DB_PATH)
+
         cur.execute(query_str, params)
-        return {"rows": cur.fetchall(), query_str: query_str}
         
         # Check if it's a SELECT query
         if str(query_str).strip().upper().startswith("SELECT"):

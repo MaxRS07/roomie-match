@@ -22,7 +22,7 @@ app.get('/api/users', async (req, res) => {
 });
 
 app.get('/api/users/:id', async (req, res) => {
-    const result = await getUserById(Number(req.params.id));
+    const result = await getUserById(req.params.id);
     if (result.success) {
         res.json(result.data);
     } else {
@@ -40,7 +40,7 @@ app.post('/api/users', async (req, res) => {
 });
 
 app.put('/api/users/:id', async (req, res) => {
-    const result = await updateUser(Number(req.params.id), req.body);
+    const result = await updateUser(req.params.id, req.body);
     if (result.success) {
         res.json(result.data);
     } else {
@@ -49,7 +49,7 @@ app.put('/api/users/:id', async (req, res) => {
 });
 
 app.delete('/api/users/:id', async (req, res) => {
-    const result = await deleteUser(Number(req.params.id));
+    const result = await deleteUser(req.params.id);
     if (result.success) {
         res.json({ message: 'User deleted' });
     } else {
