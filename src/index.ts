@@ -1,6 +1,16 @@
-const appElement = document.getElementById('app');
+import { router } from './pages/routes.js';
+import { LoginPage } from './pages/login.js';
+import { DashboardPage } from './pages/match.js';
 
-if (appElement) {
-    appElement.innerHTML = `<h1>Roomie Match!</h1>`;
-    console.log('App loaded');
-}
+router.register(LoginPage);
+router.register(DashboardPage);
+
+// Handle routing
+window.addEventListener('popstate', (e) => {
+    const page = (e.state?.page as string) || 'login';
+    router.navigate(page as any);
+});
+
+// Start app
+const token = localStorage.getItem('authToken');
+router.navigate(token ? 'dashboard' : 'login');

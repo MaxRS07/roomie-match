@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "dev:server": "ts-node src/server.ts",
-    "dev:all": "concurrently \"npm run dev\" \"npm run dev:server\"",
+    "dev:all": "concurrently \"npm run dev\" \"npm run dev:server\" \"bash dbservice.sh\"",
     "build": "vite build",
     "preview": "vite preview",
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -17,9 +17,9 @@
   "type": "module",
   "devDependencies": {
     "@types/cors": "^2.8.19",
-    "concurrently": "^8.2.2",
     "@types/express": "^5.0.6",
     "@types/node": "^25.3.2",
+    "concurrently": "^8.2.2",
     "nodemon": "^3.1.14",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3",
