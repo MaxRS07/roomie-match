@@ -1,0 +1,131 @@
+.messages-container {
+    display: flex;
+    height: calc(100vh - 60px);
+    width: 100%;
+    overflow: hidden;
+}
+
+.messages-sidebar {
+    display: flex;
+    flex-direction: column;
+    width: 300px;
+    border-right: 1px solid #ddd;
+    background-color: #f9f9f9;
+    overflow-y: auto;
+    flex-shrink: 0;
+}
+
+.sidebar-title {
+    padding: 10px;
+    font-weight: bold;
+    border-bottom: 1px solid #ddd;
+}
+
+.chat-item {
+    border-top: 2px solid #eee;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    padding-block: 10px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    padding-inline: 15px;
+}
+
+.chat-item img {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+}
+.conversation-info {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 5px;
+    flex: 1;
+}
+.notif {
+    height: min-content;
+    background-color: red;
+    color: white;
+    font-size: 12px;
+    padding: 2px 6px;
+    border-radius: 12px;
+    margin-left: auto;
+}
+
+.chat-item:hover {
+    background-color: #eee;
+}
+
+.chat-item.active {
+    background-color: #007bff;
+    color: white;
+}
+
+.messages-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    overflow-y: auto;
+    justify-content: center;
+    /* align-items: center; */
+}
+
+.messages-list {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    width: 100%;
+    max-width: 600px;
+    height: 100%;
+}
+
+.conversation-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    margin-bottom: 20px;
+    width: 100%;
+    border-bottom: 2px solid #ddd;
+}
+
+.message {
+    max-width: 70%;
+    padding: 10px 15px;
+    border-radius: 20px;
+    position: relative;
+    word-wrap: break-word;
+}
+
+.message.sent {
+    background-color: #007bff;
+    color: white;
+    align-self: flex-end;
+    border-bottom-right-radius: 0;
+}
+
+.message.received {
+    background-color: #d8d8d8;
+    color: black;
+    align-self: flex-start;
+    border-bottom-left-radius: 0;
+}
+
+.timestamp {
+    font-size: 10px;
+    color: #888;
+    margin-top: 5px;
+}
+
+.message-input {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    padding: 10px;
+    border-top: 1px solid #ddd;
+    margin-top: auto;
+}

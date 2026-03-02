@@ -1,29 +1,64 @@
-import type { User } from '../types/entities.js';
+import { arrayToUser, type Message, type User } from '../types/entities.js';
 import type { QueryResult } from '../types/query.js';
 
 const DATABASE_URL = 'http://localhost:8000';
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes in milliseconds
 
-// Convert database array row to User object
-// Expected order: [user_id, name, email, password_hash, age, gender, occupation, bio, profile_photo, created_at]
-function arrayToUser(row: any[]): User {
-    return {
-        user_id: row[0],
-        name: row[1],
-        email: row[2],
-        password_hash: row[3],
-        age: row[4],
-        gender: row[5],
-        occupation: row[6],
-        bio: row[7],
-        profile_photo: row[8],
-        created_at: row[9]
-    };
+interface CacheEntry<T> {
+    data: T;
+    timestamp: number;
+}
+
+const queryCache = new Map<string, CacheEntry<any>>();
+
+function generateCacheKey(query: string, params: any[]): string {
+    return `${query}:${JSON.stringify(params)}`;
+}
+
+function getCachedQuery<T>(key: string): T | null {
+    const entry = queryCache.get(key);
+    if (!entry) return null;
+
+    const now = Date.now();
+    if (now - entry.timestamp > CACHE_TTL) {
+        queryCache.delete(key);
+        return null;
+    }
+
+    return entry.data as T;
+}
+
+function setCachedQuery<T>(key: string, data: T): void {
+    queryCache.set(key, { data, timestamp: Date.now() });
+}
+
+function invalidateCache(pattern?: string): void {
+    if (!pattern) {
+        queryCache.clear();
+    } else {
+        for (const key of queryCache.keys()) {
+            if (key.includes(pattern)) {
+                queryCache.delete(key);
+            }
+        }
+    }
 }
 
 async function executeQuery<T = any>(
     query: string,
-    params: any[] = []
+    params: any[] = [],
+    useCache: boolean = true
 ): Promise<QueryResult<T>> {
+    const cacheKey = generateCacheKey(query, params);
+
+    // Check cache for read queries
+    if (useCache) {
+        const cached = getCachedQuery<T>(cacheKey);
+        if (cached !== null) {
+            return { success: true, data: cached };
+        }
+    }
+
     try {
         const response = await fetch(`${DATABASE_URL}/query`, {
             method: 'POST',
@@ -36,8 +71,14 @@ async function executeQuery<T = any>(
         }
 
         const response_data = await response.json();
-        // Unwrap the API response - it returns {data: ...} 
-        return { success: true, data: response_data.data };
+        const result = { success: true, data: response_data.data };
+
+        // Cache successful read queries
+        if (useCache) {
+            setCachedQuery(cacheKey, response_data.data);
+        }
+
+        return result;
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         console.error('Query error:', errorMessage);
@@ -55,18 +96,24 @@ export async function getUserById(userId: string) {
 
 export async function createUser(userData: { name: string; email: string; preferences?: any }) {
     const { name, email, preferences } = userData;
-    return executeQuery(
+    const result = await executeQuery(
         'INSERT INTO Users (name, email, preferences) VALUES (?, ?, ?)',
-        [name, email, JSON.stringify(preferences || {})]
+        [name, email, JSON.stringify(preferences || {})],
+        false // Don't cache write operations
     );
+    invalidateCache('Users'); // Invalidate related caches
+    return result;
 }
 
 export async function updateUser(userId: string, userData: Partial<{ name: string; email: string; preferences: any }>) {
     const { name, email, preferences } = userData;
-    return executeQuery(
+    const result = await executeQuery(
         'UPDATE Users SET name = ?, email = ?, preferences = ? WHERE id = ?',
-        [name, email, JSON.stringify(preferences || {}), userId]
+        [name, email, JSON.stringify(preferences || {}), userId],
+        false // Don't cache write operations
     );
+    invalidateCache('Users'); // Invalidate related caches
+    return result;
 }
 export async function authenticateUser(email: string, password: string) {
     const user = await executeQuery(
@@ -80,7 +127,9 @@ export async function authenticateUser(email: string, password: string) {
     }
 }
 export async function deleteUser(userId: string) {
-    return executeQuery('DELETE FROM Users WHERE id = ?', [userId]);
+    const result = await executeQuery('DELETE FROM Users WHERE id = ?', [userId], false);
+    invalidateCache('Users'); // Invalidate related caches
+    return result;
 }
 
 export async function getUserPreferences(userId: string) {
@@ -88,11 +137,32 @@ export async function getUserPreferences(userId: string) {
 }
 
 export async function getProfilePhoto(userId: string): Promise<string | null> {
-    const result = await executeQuery('SELECT * FROM ProfilePhoto WHERE user_id = ?', [userId]);
+    const result = await executeQuery('SELECT data FROM ProfilePhoto WHERE user_id = ?', [userId]);
     if (result.success && result.data && result.data.length > 0) {
-        return result.data[0][1];
+        return result.data[0][0];
     }
     return null;
+}
+
+export async function getUserChats(userId: string): Promise<QueryResult<[string, number][]>> {
+    return executeQuery(`
+        SELECT 
+            sender_id, 
+            SUM(CASE WHEN Messages.read = 'False' THEN 1 ELSE 0 END) AS unread_count
+        FROM Messages
+        WHERE receiver_id = ?
+        GROUP BY sender_id
+        ORDER BY unread_count DESC, sender_id DESC;
+    `, [userId]);
+}
+
+export async function getChatMessages(from_id: string, to_id: string): Promise<QueryResult<Message[]>> {
+    return executeQuery(`
+        SELECT * FROM Messages
+        WHERE (sender_id = ? AND receiver_id = ?)
+           OR (sender_id = ? AND receiver_id = ?)
+        ORDER BY sent_at ASC;
+    `, [from_id, to_id, to_id, from_id]);
 }
 
 export async function getCurrentUser(): Promise<User | null> {

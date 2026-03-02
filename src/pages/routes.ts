@@ -1,9 +1,17 @@
-export type PageName = 'login' | 'dashboard' | 'matches' | 'profile' | 'notfound';
+export type PageName = 'login' | 'dashboard' | 'matches' | 'messages' | 'profile' | 'notfound';
 
-interface Page {
+export interface Page {
     name: PageName;
     render: () => void;
     cleanup?: () => void;
+}
+
+const addPageCSS = (pageName: PageName) => {
+    document.createElement('link');
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = `/src/styles/${pageName}.css`;
+    document.head.appendChild(link);
 }
 
 class Router {
@@ -36,6 +44,9 @@ class Router {
 
         this.currentPage = pageName;
         page.render();
+
+        document.title = `${pageName.charAt(0).toUpperCase() + pageName.slice(1)} | Roomie Match`;
+        addPageCSS(pageName);
 
         // Update browser history
         window.history.pushState({ page: pageName }, '', `/${pageName}`);

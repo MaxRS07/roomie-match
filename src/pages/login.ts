@@ -1,7 +1,6 @@
 import { authenticateUser } from "../lib/db.js";
 import { router } from "./routes.js";
 
-// src/pages/login.ts
 export const LoginPage = {
     name: 'login' as const,
     render: () => {

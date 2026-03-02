@@ -4,11 +4,12 @@ import { DashboardPage } from './pages/dashboard.js';
 import { MatchesPage } from './pages/matches.js';
 import { ProfilePage } from './pages/profile.js';
 import { NotFoundPage } from './pages/notfound.js';
-import { Cache } from './lib/cache.js';
+import { MessagesPage } from './pages/messages.js';
 
 router.register(LoginPage);
 router.register(DashboardPage);
 router.register(MatchesPage);
+router.register(MessagesPage)
 router.register(ProfilePage);
 router.register(NotFoundPage);
 
@@ -25,7 +26,7 @@ const getPageFromPath = () => {
     const pageName = segments[0] || '';
 
     // Map valid page routes
-    const validPages = ['login', 'dashboard', 'matches', 'profile'];
+    const validPages = ['login', 'dashboard', 'matches', 'messages', 'profile'];
     if (validPages.includes(pageName)) {
         return pageName as any;
     }

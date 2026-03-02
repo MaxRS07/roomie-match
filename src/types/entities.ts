@@ -149,3 +149,85 @@ export interface CreateReportDTO {
     reported_listing_id?: string;
     reason: string;
 }
+
+// Convert database array row to User object
+// Expected order: [user_id, name, email, password_hash, age, gender, occupation, bio, profile_photo, created_at]
+export function arrayToUser(row: any[]): User {
+    return {
+        user_id: row[0],
+        name: row[1],
+        email: row[2],
+        password_hash: row[3],
+        age: row[4],
+        gender: row[5],
+        occupation: row[6],
+        bio: row[7],
+        profile_photo: row[8],
+        created_at: row[9]
+    };
+}
+
+export function arrayToUserPreferences(row: any[]): UserPreferences {
+    return {
+        preference_id: row[0],
+        user_id: row[1],
+        cleanliness_level: row[2],
+        sleep_schedule: row[3],
+        pet_friendly: row[4],
+        smoking_allowed: row[5],
+        noise_tolerance: row[6],
+        guests_allowed: row[7],
+        work_schedule: row[8]
+    };
+}
+
+export function arrayToListing(row: any[]): Listing {
+    return {
+        listing_id: row[0],
+        user_id: row[1],
+        title: row[2],
+        description: row[3],
+        rent_price: row[4],
+        location: row[5],
+        city: row[6],
+        state: row[7],
+        zip_code: row[8],
+        available_date: row[9],
+        num_rooms: row[10],
+        num_bathrooms: row[11],
+        is_active: row[12],
+        created_at: row[13]
+    };
+}
+
+export function arrayToUserInterest(row: any[]): UserInterest {
+    return {
+        interest_id: row[0],
+        renter_id: row[1],
+        listing_id: row[2],
+        status: row[3],
+        created_at: row[4]
+    };
+}
+
+export function arrayToReport(row: any[]): Report {
+    return {
+        report_id: row[0],
+        reporter_id: row[1],
+        reported_user_id: row[2],
+        reported_listing_id: row[3],
+        reason: row[4],
+        created_at: row[5]
+    };
+}
+
+export function arrayToMessage(row: any[]): Message {
+    return {
+        message_id: row[0],
+        sender_id: row[1],
+        receiver_id: row[2],
+        content: row[3],
+        sent_at: row[4],
+        read: row[5]
+    };
+}
