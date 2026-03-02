@@ -75,7 +75,7 @@ export interface Report {
     reported_user_id?: string;
     reported_listing_id?: string;
     reason: string;
-    created_at: number;
+    created_at: string;
 }
 
 // Message
@@ -83,8 +83,8 @@ export interface Message {
     message_id: string;
     sender_id: string;
     receiver_id: string;
-    content: Buffer;
-    sent_at: number;
+    content: string;
+    sent_at: string;
     read: string; // Could be 'true' or 'false'
 }
 

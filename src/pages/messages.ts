@@ -1,10 +1,7 @@
-import { getChatMessages, getCurrentUser, getProfilePhoto, getUserById, getUserChats } from "../lib/db.js";
+import { getChatMessages, getCurrentUser, getProfilePhoto, getUserById, getUserChats, sendMessage } from "../lib/db.js";
 import { Header } from "../lib/header.js";
 import { arrayToMessage, arrayToUser, type Message, type User } from "../types/entities.js";
 import type { Page } from "./routes.js";
-
-
-const messages: Message[] = []
 
 export const MessagesPage: Page = {
     name: 'messages' as const,
@@ -22,22 +19,30 @@ export const MessagesPage: Page = {
             </div>
         `;
 
-        const loadConversation = async (userId: string, name: string) => {
-            messages.length = 0;
+        const loadConversation = async (userId: string) => {
             const messagesContent = document.querySelector('.messages-content')!;
             const currentUser = await getCurrentUser();
+            const resp = await getUserById(userId);
+            console.log(userId, resp);
             if (!currentUser) {
                 messagesContent.innerHTML = `<p>Please log in to view messages.</p>`;
                 return;
             }
+            if (!resp.success || !resp.data || resp.data.length === 0) {
+                messagesContent.innerHTML = `<p>Something went wrong.</p>`;
+                return;
+            }
+            const sender = arrayToUser(resp.data[0]);
             const res = await getChatMessages(userId, currentUser.user_id);
+            console.log('Chat messages result:', res);
             if (res.success && res.data) {
-                const messageObjects: Message[] = res.data.map(message => arrayToMessage(message));
-                messages.push(...messageObjects);
-                updateMessagesUI(messagesContent, currentUser);
+                const messageObjects: Message[] = res.data.map((message: any) => arrayToMessage(message));
+                updateMessagesUI(messagesContent, currentUser, messageObjects, sender);
             }
         };
-        const updateMessagesUI = (container: Element, currentUser: User) => {
+        const updateMessagesUI = (container: Element, currentUser: User, messages: Message[], otherUser: User) => {
+            document.getElementById('send-message-button')?.removeEventListener('click', () => { });
+            document.getElementById('message-input-field')?.removeEventListener('keypress', () => { });
             const messagesHTML = messages.map(message => {
                 const isSentByCurrentUser = message.sender_id === currentUser.user_id;
                 return `
@@ -51,7 +56,7 @@ export const MessagesPage: Page = {
             }).join('');
             container.innerHTML = `
                     <div class="conversation-header">
-                        <h2>${currentUser.name}</h2>
+                        <h2>${otherUser.name}</h2>
                     </div>
                     <div class="messages-list">
                         ${messagesHTML}
@@ -61,10 +66,10 @@ export const MessagesPage: Page = {
                         <button id="send-message-button">Send</button>
                     </div>
                 `;
-            document.getElementById('send-message-button')?.addEventListener('click', (e) => handleSendMessage(e, currentUser));
+            document.getElementById('send-message-button')?.addEventListener('click', (e) => handleSendMessage(e, currentUser, otherUser));
             document.getElementById('message-input-field')?.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') {
-                    handleSendMessage(e as unknown as PointerEvent, currentUser);
+                    handleSendMessage(e as unknown as PointerEvent, currentUser, otherUser);
                 }
             });
         };
@@ -86,7 +91,7 @@ export const MessagesPage: Page = {
                     `;
                     return;
                 }
-                var fchats = result.data.map(async ([senderId, count]) => {
+                var fchats = result.data.filter(([senderId, count]) => senderId !== userId).map(async ([senderId, count]) => {
                     const senderResult = await getUserById(senderId);
                     if (senderResult.success && senderResult.data && senderResult.data.length > 0) {
                         const sender = arrayToUser(senderResult.data[0]);
@@ -121,7 +126,7 @@ export const MessagesPage: Page = {
                                     item.classList.remove('active');
                                 });
                                 chatItem.classList.add('active');
-                                loadConversation(userId, name);
+                                loadConversation(userId);
                             });
                         }
                     });
@@ -133,7 +138,7 @@ export const MessagesPage: Page = {
 
         getAllChats();
 
-        const handleSendMessage = async (e: PointerEvent, currentUser: User) => {
+        const handleSendMessage = async (e: PointerEvent, currentUser: User, otherUser: User) => {
             e.preventDefault();
             const messageInput = document.getElementById('message-input-field') as HTMLInputElement;
             if (messageInput.value.trim() === '') {
@@ -144,15 +149,15 @@ export const MessagesPage: Page = {
                 console.log('Message to send:', content);
                 messageInput.value = '';
             }
-            messages.push({
-                message_id: 'temp-id-' + Date.now(),
+            sendMessage({
+                message_id: '',
                 sender_id: currentUser.user_id,
-                receiver_id: currentUser.user_id,
-                content: Buffer.from(content),
-                sent_at: Date.now(),
+                receiver_id: otherUser.user_id,
+                content: content,
+                sent_at: new Date().toISOString(),
                 read: 'False'
             });
-            updateMessagesUI(document.querySelector('.messages-content')!, currentUser);
+            await loadConversation(otherUser.user_id);
         }
 
         Header.setupListeners(MessagesPage, { pageName: 'messages', showProfileDropdown: true });

@@ -83,6 +83,12 @@
     height: 100%;
 }
 
+.message-container {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+}
+
 .conversation-header {
     display: flex;
     align-items: center;
@@ -119,6 +125,14 @@
     font-size: 10px;
     color: #888;
     margin-top: 5px;
+}
+
+.message.sent + .timestamp {
+    align-self: flex-end;
+}
+
+.message.received + .timestamp {
+    align-self: flex-start;
 }
 
 .message-input {

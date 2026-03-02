@@ -150,19 +150,28 @@ export async function getUserChats(userId: string): Promise<QueryResult<[string,
             sender_id, 
             SUM(CASE WHEN Messages.read = 'False' THEN 1 ELSE 0 END) AS unread_count
         FROM Messages
-        WHERE receiver_id = ?
+        WHERE receiver_id = ? OR sender_id = ?
         GROUP BY sender_id
         ORDER BY unread_count DESC, sender_id DESC;
-    `, [userId]);
+    `, [userId, userId]);
 }
 
-export async function getChatMessages(from_id: string, to_id: string): Promise<QueryResult<Message[]>> {
+export async function getChatMessages(from_id: string, to_id: string): Promise<QueryResult> {
     return executeQuery(`
         SELECT * FROM Messages
         WHERE (sender_id = ? AND receiver_id = ?)
            OR (sender_id = ? AND receiver_id = ?)
         ORDER BY sent_at ASC;
     `, [from_id, to_id, to_id, from_id]);
+}
+
+export async function sendMessage(message: Message): Promise<QueryResult> {
+    const result = await executeQuery(
+        'INSERT INTO Messages (sender_id, receiver_id, content, sent_at, read) VALUES (?, ?, ?, ?, ?)',
+        [message.sender_id, message.receiver_id, message.content, message.sent_at, message.read],
+        false // Don't cache write operations
+    );
+    return result;
 }
 
 export async function getCurrentUser(): Promise<User | null> {
