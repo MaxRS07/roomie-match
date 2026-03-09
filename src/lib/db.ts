@@ -1,330 +1,244 @@
-import { arrayToUser, arrayToListing, arrayToUserInterest, type Message, type User, type Listing, type UserInterest } from '../types/entities.js';
+import { createClient } from '@supabase/supabase-js';
+import {
+    rowToUser, rowToListing, rowToUserInterest, rowToUserPreferences, rowToMessage,
+    type Message, type User, type Listing, type UserInterest
+} from '../types/entities.js';
 import type { QueryResult } from '../types/query.js';
 
-const DATABASE_URL = 'http://localhost:8000';
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes in milliseconds
+const SUPABASE_URL = 'https://njkmhwmxlqxjtoikodgr.supabase.co';
+const SUPABASE_ANON_KEY = "sb_publishable_BBneOiwuHde2l2Ofa_04Qw_rLWhCsT1";
 
-interface CacheEntry<T> {
-    data: T;
-    timestamp: number;
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ─── Users ────────────────────────────────────────────────────────────────────
+
+export async function getAllUsers(): Promise<QueryResult<User[]>> {
+    const { data, error } = await supabase.from('Users').select('*');
+    if (error) return { success: false, error: error.message };
+    return { success: true, data: data.map(rowToUser) };
 }
 
-const queryCache = new Map<string, CacheEntry<any>>();
-
-function generateCacheKey(query: string, params: any[]): string {
-    return `${query}:${JSON.stringify(params)}`;
+export async function getUserById(userId: string): Promise<QueryResult<User[]>> {
+    const { data, error } = await supabase.from('Users').select('*').eq('user_id', userId);
+    if (error) return { success: false, error: error.message };
+    return { success: true, data: data.map(rowToUser) };
 }
 
-function getCachedQuery<T>(key: string): T | null {
-    const entry = queryCache.get(key);
-    if (!entry) return null;
-
-    const now = Date.now();
-    if (now - entry.timestamp > CACHE_TTL) {
-        queryCache.delete(key);
-        return null;
-    }
-
-    return entry.data as T;
+export async function createUser(userData: { name: string; email: string; password_hash: string; age?: string; gender?: string; occupation?: string; bio?: string }): Promise<QueryResult> {
+    const { error } = await supabase.from('Users').insert([{
+        ...userData,
+        created_at: Date.now()
+    }]);
+    if (error) return { success: false, error: error.message };
+    return { success: true, data: { affected: 1 } };
 }
 
-function setCachedQuery<T>(key: string, data: T): void {
-    queryCache.set(key, { data, timestamp: Date.now() });
-}
-
-function invalidateCache(pattern?: string): void {
-    if (!pattern) {
-        queryCache.clear();
-    } else {
-        for (const key of queryCache.keys()) {
-            if (key.includes(pattern)) {
-                queryCache.delete(key);
-            }
-        }
-    }
-}
-
-async function executeQuery<T = any>(
-    query: string,
-    params: any[] = [],
-    useCache: boolean = true
-): Promise<QueryResult<T>> {
-    const cacheKey = generateCacheKey(query, params);
-
-    // Check cache for read queries
-    if (useCache) {
-        const cached = getCachedQuery<T>(cacheKey);
-        if (cached !== null) {
-            return { success: true, data: cached };
-        }
-    }
-
-    try {
-        const response = await fetch(`${DATABASE_URL}/query`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query, params })
-        });
-
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const response_data = await response.json();
-        const result = { success: true, data: response_data.data };
-
-        // Cache successful read queries
-        if (useCache) {
-            setCachedQuery(cacheKey, response_data.data);
-        }
-
-        return result;
-    } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        console.error('Query error:', errorMessage);
-        return { success: false, error: errorMessage };
-    }
-}
-
-export async function getAllUsers() {
-    return executeQuery('SELECT * FROM Users');
-}
-
-export async function getUserById(userId: string) {
-    return executeQuery('SELECT * FROM Users WHERE user_id = ?', [userId]);
-}
-
-export async function createUser(userData: { name: string; email: string; preferences?: any }) {
-    const { name, email, preferences } = userData;
-    const result = await executeQuery(
-        'INSERT INTO Users (name, email, preferences) VALUES (?, ?, ?)',
-        [name, email, JSON.stringify(preferences || {})],
-        false // Don't cache write operations
-    );
-    invalidateCache('Users'); // Invalidate related caches
-    return result;
-}
-
-export async function updateUser(userId: string, userData: Partial<{ name: string; email: string; preferences: any }>) {
-    const { name, email, preferences } = userData;
-    const result = await executeQuery(
-        'UPDATE Users SET name = ?, email = ?, preferences = ? WHERE id = ?',
-        [name, email, JSON.stringify(preferences || {}), userId],
-        false // Don't cache write operations
-    );
-    invalidateCache('Users'); // Invalidate related caches
-    return result;
-}
-export async function authenticateUser(email: string, password: string) {
-    const user = await executeQuery(
-        'SELECT * FROM Users WHERE email = ? AND password_hash = ?',
-        [email, password]
-    );
-    if (user.success && user.data && user.data.length > 0) {
-        return { success: true, data: arrayToUser(user.data[0]) };
-    } else {
-        throw new Error('Authentication failed: Invalid email or password');
-    }
-}
-export async function deleteUser(userId: string) {
-    const result = await executeQuery('DELETE FROM Users WHERE id = ?', [userId], false);
-    invalidateCache('Users'); // Invalidate related caches
-    return result;
-}
-
-export async function getUserPreferences(userId: string) {
-    return executeQuery('SELECT * FROM UserPreferences WHERE user_id = ?', [userId]);
-}
-
-export async function updateUserPreferences(userId: string, prefs: {
-    cleanliness_level?: string;
-    sleep_schedule?: string;
-    pet_friendly?: string;
-    smoking_allowed?: string;
-    noise_tolerance?: string;
-    guests_allowed?: string;
-    work_schedule?: string;
-}): Promise<QueryResult> {
-    const result = await executeQuery(
-        `UPDATE UserPreferences SET 
-            cleanliness_level = ?, sleep_schedule = ?, pet_friendly = ?,
-            smoking_allowed = ?, noise_tolerance = ?, guests_allowed = ?, work_schedule = ?
-         WHERE user_id = ?`,
-        [
-            prefs.cleanliness_level ?? '', prefs.sleep_schedule ?? '', prefs.pet_friendly ?? '',
-            prefs.smoking_allowed ?? '', prefs.noise_tolerance ?? '', prefs.guests_allowed ?? '',
-            prefs.work_schedule ?? '', userId
-        ],
-        false
-    );
-    invalidateCache('UserPreferences');
-    return result;
+export async function updateUser(userId: string, userData: Partial<{ name: string; email: string; preferences: any }>): Promise<QueryResult> {
+    const { error } = await supabase.from('Users').update(userData).eq('user_id', userId);
+    if (error) return { success: false, error: error.message };
+    return { success: true, data: { affected: 1 } };
 }
 
 export async function updateUserProfile(userId: string, data: {
-    name?: string;
-    email?: string;
-    age?: string;
-    gender?: string;
-    occupation?: string;
-    bio?: string;
+    name?: string; email?: string; age?: string; gender?: string; occupation?: string; bio?: string;
 }): Promise<QueryResult> {
-    const result = await executeQuery(
-        `UPDATE User SET name = ?, email = ?, age = ?, gender = ?, occupation = ?, bio = ? WHERE user_id = ?`,
-        [data.name ?? '', data.email ?? '', data.age ?? '', data.gender ?? '', data.occupation ?? '', data.bio ?? '', userId],
-        false
-    );
-    invalidateCache('Users');
-    // Also invalidate localStorage cache
-    const authToken = localStorage.getItem('authToken');
-    if (authToken) {
-        localStorage.removeItem('user:' + authToken);
-    }
-    return result;
+    const { error } = await supabase.from('Users').update(data).eq('user_id', userId);
+    if (error) return { success: false, error: error.message };
+    // Bust localStorage cache so header/pages see fresh data
+    localStorage.removeItem('user:' + userId);
+    return { success: true, data: { affected: 1 } };
 }
 
-export async function updateProfilePhoto(userId: string, dataUrl: string): Promise<QueryResult> {
-    // Try update first, then insert if no rows affected
-    const result = await executeQuery(
-        'UPDATE ProfilePhoto SET data = ? WHERE user_id = ?',
-        [dataUrl, userId],
-        false
-    );
-    invalidateCache('ProfilePhoto');
-    return result;
+export async function deleteUser(userId: string): Promise<QueryResult> {
+    const { error } = await supabase.from('Users').delete().eq('user_id', userId);
+    if (error) return { success: false, error: error.message };
+    return { success: true, data: { affected: 1 } };
 }
 
-export async function getProfilePhoto(userId: string): Promise<string | null> {
-    const result = await executeQuery('SELECT data FROM ProfilePhoto WHERE user_id = ?', [userId]);
-    if (result.success && result.data && result.data.length > 0) {
-        return result.data[0][0];
-    }
-    return null;
+export async function authenticateUser(email: string, password: string): Promise<{ success: boolean; data: User }> {
+    const { data, error } = await supabase
+        .from('Users')
+        .select('*')
+        .eq('email', email)
+        .eq('password_hash', password)
+        .single();
+    if (error || !data) throw new Error('Authentication failed: Invalid email or password');
+    return { success: true, data: rowToUser(data) };
 }
 
-export async function getUserChats(userId: string): Promise<QueryResult<[string, number][]>> {
-    return executeQuery(`
-        SELECT 
-            sender_id, 
-            SUM(CASE WHEN Messages.read = 'False' THEN 1 ELSE 0 END) AS unread_count
-        FROM Messages
-        WHERE receiver_id = ? OR sender_id = ?
-        GROUP BY sender_id
-        ORDER BY unread_count DESC, sender_id DESC;
-    `, [userId, userId]);
-}
-
-export async function getChatMessages(from_id: string, to_id: string): Promise<QueryResult> {
-    return executeQuery(`
-        SELECT * FROM Messages
-        WHERE (sender_id = ? AND receiver_id = ?)
-           OR (sender_id = ? AND receiver_id = ?)
-        ORDER BY sent_at ASC;
-    `, [from_id, to_id, to_id, from_id]);
-}
-
-export async function sendMessage(message: Message): Promise<QueryResult> {
-    const result = await executeQuery(
-        'INSERT INTO Messages (sender_id, receiver_id, content, sent_at, read) VALUES (?, ?, ?, ?, ?)',
-        [message.sender_id, message.receiver_id, message.content, message.sent_at, message.read],
-        false // Don't cache write operations
-    );
-    return result;
-}
+// ─── Current User (client-side session via localStorage) ─────────────────────
 
 export async function getCurrentUser(): Promise<User | null> {
     const authToken = localStorage.getItem('authToken');
+    if (!authToken) return null;
 
-    if (!authToken) {
-        return null;
-    }
-
-    // Check if user data is cached in localStorage
-    const cachedUser = localStorage.getItem('user:' + authToken);
-    if (cachedUser) {
-        return JSON.parse(cachedUser) as User;
-    }
+    const cached = localStorage.getItem('user:' + authToken);
+    if (cached) return JSON.parse(cached) as User;
 
     const result = await getUserById(authToken);
-
     if (result.success && result.data && result.data.length > 0) {
-        console.log('User data retrieved from database:', result.data[0]);
-        const user = arrayToUser(result.data[0]);
+        const user = result.data[0]!;
         localStorage.setItem('user:' + authToken, JSON.stringify(user));
         return user;
     }
     return null;
 }
 
-export async function getActiveListings(): Promise<QueryResult<Listing[]>> {
-    const result = await executeQuery(
-        "SELECT * FROM Listings WHERE is_active = '1' ORDER BY created_at DESC"
-    );
-    console.log('Active listings query result:', result);
-    if (result.success && result.data) {
-        return { success: true, data: result.data.map(arrayToListing) };
-    }
-    return result;
+// ─── User Preferences ─────────────────────────────────────────────────────────
+
+export async function getUserPreferences(userId: string): Promise<QueryResult> {
+    const { data, error } = await supabase.from('UserPreferences').select('*').eq('user_id', userId);
+    if (error) return { success: false, error: error.message };
+    return { success: true, data: data.map(rowToUserPreferences) };
 }
 
-export async function createUserInterest(renterId: string, listingId: string): Promise<QueryResult> {
-    const result = await executeQuery(
-        "INSERT INTO UserInterests (renter_id, listing_id, status, created_at) VALUES (?, ?, 'Pending', ?)",
-        [renterId, listingId, Date.now()],
-        false
-    );
-    invalidateCache('UserInterests');
-    return result;
+export async function updateUserPreferences(userId: string, prefs: {
+    cleanliness_level?: string; sleep_schedule?: string; pet_friendly?: string;
+    smoking_allowed?: string; noise_tolerance?: string; guests_allowed?: string; work_schedule?: string;
+}): Promise<QueryResult> {
+    const { error } = await supabase.from('UserPreferences').update(prefs).eq('user_id', userId);
+    if (error) return { success: false, error: error.message };
+    return { success: true, data: { affected: 1 } };
+}
+
+// ─── Photos ───────────────────────────────────────────────────────────────────
+
+export async function getProfilePhoto(userId: string): Promise<string | null> {
+    const { data, error } = await supabase
+        .from('ProfilePhoto')
+        .select('data')
+        .eq('user_id', userId)
+        .single();
+    if (error || !data) return null;
+    return data.data ?? null;
+}
+
+export async function updateProfilePhoto(userId: string, dataUrl: string): Promise<QueryResult> {
+    // Upsert so it works whether or not a row already exists
+    const { error } = await supabase
+        .from('ProfilePhoto')
+        .upsert({ user_id: userId, data: dataUrl }, { onConflict: 'user_id' });
+    if (error) return { success: false, error: error.message };
+    return { success: true, data: { affected: 1 } };
 }
 
 export async function getListingPhoto(listingId: string): Promise<string | null> {
-    const result = await executeQuery('SELECT data FROM ListingPhotos WHERE listing_id = ?', [listingId]);
-    if (result.success && result.data && result.data.length > 0) {
-        return result.data[0][0];
-    }
-    return null;
+    const { data, error } = await supabase
+        .from('ListingPhotos')
+        .select('data')
+        .eq('listing_id', listingId)
+        .single();
+    if (error || !data) return null;
+    return data.data ?? null;
+}
+
+// ─── Listings ─────────────────────────────────────────────────────────────────
+
+export async function getActiveListings(): Promise<QueryResult<Listing[]>> {
+    const { data, error } = await supabase
+        .from('Listings')
+        .select('*')
+        .eq('is_active', '1')
+        .order('created_at', { ascending: false });
+    if (error) return { success: false, error: error.message };
+    return { success: true, data: data.map(rowToListing) };
 }
 
 export async function getUserListings(userId: string): Promise<QueryResult<Listing[]>> {
-    const result = await executeQuery(
-        'SELECT * FROM Listings WHERE user_id = ? ORDER BY created_at DESC',
-        [userId]
-    );
-    if (result.success && result.data) {
-        return { success: true, data: result.data.map(arrayToListing) };
-    }
-    return result;
+    const { data, error } = await supabase
+        .from('Listings')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+    if (error) return { success: false, error: error.message };
+    return { success: true, data: data.map(rowToListing) };
+}
+
+// ─── User Interests ───────────────────────────────────────────────────────────
+
+export async function createUserInterest(renterId: string, listingId: string): Promise<QueryResult> {
+    const { error } = await supabase.from('UserInterests').insert([{
+        renter_id: renterId,
+        listing_id: listingId,
+        status: 'Pending',
+        created_at: Date.now()
+    }]);
+    if (error) return { success: false, error: error.message };
+    return { success: true, data: { affected: 1 } };
 }
 
 export async function getInterestsForListing(listingId: string): Promise<QueryResult<UserInterest[]>> {
-    const result = await executeQuery(
-        'SELECT * FROM UserInterests WHERE listing_id = ? ORDER BY created_at DESC',
-        [listingId]
-    );
-    if (result.success && result.data) {
-        return { success: true, data: result.data.map(arrayToUserInterest) };
-    }
-    return result;
-}
-
-export async function getUnreadMessageCount(userId: string): Promise<number> {
-    const result = await executeQuery(
-        "SELECT COUNT(*) FROM Messages WHERE receiver_id = ? AND read = 'False'",
-        [userId]
-    );
-    if (result.success && result.data && result.data.length > 0) {
-        return Number(result.data[0][0]) || 0;
-    }
-    return 0;
+    const { data, error } = await supabase
+        .from('UserInterests')
+        .select('*')
+        .eq('listing_id', listingId)
+        .order('created_at', { ascending: false });
+    if (error) return { success: false, error: error.message };
+    return { success: true, data: data.map(rowToUserInterest) };
 }
 
 export async function getUserSentInterests(userId: string): Promise<QueryResult<UserInterest[]>> {
-    const result = await executeQuery(
-        'SELECT * FROM UserInterests WHERE renter_id = ? ORDER BY created_at DESC',
-        [userId]
-    );
-    if (result.success && result.data) {
-        return { success: true, data: result.data.map(arrayToUserInterest) };
+    const { data, error } = await supabase
+        .from('UserInterests')
+        .select('*')
+        .eq('renter_id', userId)
+        .order('created_at', { ascending: false });
+    if (error) return { success: false, error: error.message };
+    return { success: true, data: data.map(rowToUserInterest) };
+}
+
+// ─── Messages ─────────────────────────────────────────────────────────────────
+
+export async function getUserChats(userId: string): Promise<QueryResult<[string, number][]>> {
+    // Fetch all messages involving this user, then group client-side
+    const { data, error } = await supabase
+        .from('Messages')
+        .select('sender_id, receiver_id, read')
+        .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`);
+    if (error) return { success: false, error: error.message };
+
+    const counts = new Map<string, number>();
+    for (const row of data) {
+        const otherId = row.sender_id === userId ? row.receiver_id : row.sender_id;
+        if (!counts.has(otherId)) counts.set(otherId, 0);
+        if (row.receiver_id === userId && row.read === 'False') {
+            counts.set(otherId, counts.get(otherId)! + 1);
+        }
     }
-    return result;
+
+    const result: [string, number][] = Array.from(counts.entries())
+        .sort((a, b) => b[1] - a[1]);
+    return { success: true, data: result };
+}
+
+export async function getChatMessages(from_id: string, to_id: string): Promise<QueryResult> {
+    const { data, error } = await supabase
+        .from('Messages')
+        .select('*')
+        .or(`and(sender_id.eq.${from_id},receiver_id.eq.${to_id}),and(sender_id.eq.${to_id},receiver_id.eq.${from_id})`)
+        .order('sent_at', { ascending: true });
+    if (error) return { success: false, error: error.message };
+    return { success: true, data: data.map(rowToMessage) };
+}
+
+export async function sendMessage(message: Message): Promise<QueryResult> {
+    const { error } = await supabase.from('Messages').insert([{
+        sender_id: message.sender_id,
+        receiver_id: message.receiver_id,
+        content: message.content,
+        sent_at: message.sent_at,
+        read: message.read
+    }]);
+    if (error) return { success: false, error: error.message };
+    return { success: true, data: { affected: 1 } };
+}
+
+export async function getUnreadMessageCount(userId: string): Promise<number> {
+    const { count, error } = await supabase
+        .from('Messages')
+        .select('*', { count: 'exact', head: true })
+        .eq('receiver_id', userId)
+        .eq('read', 'False');
+    if (error) return 0;
+    return count ?? 0;
 }

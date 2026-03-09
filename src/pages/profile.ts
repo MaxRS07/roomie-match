@@ -5,6 +5,8 @@ import type { User, UserPreferences } from '../types/entities.js';
 
 let isEditing = false;
 
+//rrDO36u0wDAJm9pf
+
 function showToast(message: string, type: 'success' | 'error' = 'success') {
     const existing = document.querySelector('.profile-toast');
     if (existing) existing.remove();

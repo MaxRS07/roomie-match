@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "dev:server": "ts-node src/server.ts",
-    "dev:all": "concurrently \"npm run dev\" \"npm run dev:server\" \"bash dbservice.sh\"",
+    "dev:all": "concurrently \"npm run dev\" \"npm run dev:server\"",
     "build": "vite build",
     "preview": "vite preview",
     "predeploy": "npm run build",
@@ -28,8 +28,12 @@
     "vite": "^7.3.1"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.99.0",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "install": "^0.13.0",
+    "npm": "^11.11.0",
+    "sqlite3": "^5.1.7"
   }
 }
