@@ -6,14 +6,6 @@ export interface Page {
     cleanup?: () => void;
 }
 
-const addPageCSS = (pageName: PageName) => {
-    document.createElement('link');
-    const link = document.createElement('link');
-    link.rel = 'stylesheet';
-    link.href = `/src/styles/${pageName}.css`;
-    document.head.appendChild(link);
-}
-
 class Router {
     private pages: Map<PageName, Page> = new Map();
     private currentPage: PageName | null = null;
@@ -46,7 +38,6 @@ class Router {
         page.render();
 
         document.title = `${pageName.charAt(0).toUpperCase() + pageName.slice(1)} | Roomie Match`;
-        addPageCSS(pageName);
 
         // Update browser history
         window.history.pushState({ page: pageName }, '', `/${pageName}`);

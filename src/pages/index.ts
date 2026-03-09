@@ -1,16 +1,16 @@
-import './styles/global.css';
-import './styles/dashboard.css';
-import './styles/matches.css';
-import './styles/messages.css';
-import './styles/profile.css';
+import '../styles/global.css';
+import '../styles/dashboard.css';
+import '../styles/matches.css';
+import '../styles/messages.css';
+import '../styles/profile.css';
 
-import { router } from './pages/routes.js';
-import { LoginPage } from './pages/login.js';
-import { DashboardPage } from './pages/dashboard.js';
-import { MatchesPage } from './pages/matches.js';
-import { ProfilePage } from './pages/profile.js';
-import { NotFoundPage } from './pages/notfound.js';
-import { MessagesPage } from './pages/messages.js';
+import { router } from './routes.js';
+import { LoginPage } from './login.js';
+import { DashboardPage } from './dashboard.js';
+import { MatchesPage } from './matches.js';
+import { ProfilePage } from './profile.js';
+import { NotFoundPage } from './notfound.js';
+import { MessagesPage } from './messages.js';
 
 router.register(LoginPage);
 router.register(DashboardPage);
