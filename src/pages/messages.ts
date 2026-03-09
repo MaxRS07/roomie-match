@@ -69,7 +69,7 @@ export const MessagesPage: Page = {
             document.getElementById('send-message-button')?.addEventListener('click', (e) => handleSendMessage(e, currentUser, otherUser));
             document.getElementById('message-input-field')?.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') {
-                    handleSendMessage(e as unknown as PointerEvent, currentUser, otherUser);
+                    handleSendMessage(e, currentUser, otherUser);
                 }
             });
         };
@@ -138,7 +138,7 @@ export const MessagesPage: Page = {
 
         getAllChats();
 
-        const handleSendMessage = async (e: PointerEvent, currentUser: User, otherUser: User) => {
+        const handleSendMessage = async (e: Event, currentUser: User, otherUser: User) => {
             e.preventDefault();
             const messageInput = document.getElementById('message-input-field') as HTMLInputElement;
             if (messageInput.value.trim() === '') {

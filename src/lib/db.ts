@@ -1,4 +1,4 @@
-import { arrayToUser, type Message, type User } from '../types/entities.js';
+import { arrayToUser, arrayToListing, arrayToUserInterest, type Message, type User, type Listing, type UserInterest } from '../types/entities.js';
 import type { QueryResult } from '../types/query.js';
 
 const DATABASE_URL = 'http://localhost:8000';
@@ -136,6 +136,64 @@ export async function getUserPreferences(userId: string) {
     return executeQuery('SELECT * FROM UserPreferences WHERE user_id = ?', [userId]);
 }
 
+export async function updateUserPreferences(userId: string, prefs: {
+    cleanliness_level?: string;
+    sleep_schedule?: string;
+    pet_friendly?: string;
+    smoking_allowed?: string;
+    noise_tolerance?: string;
+    guests_allowed?: string;
+    work_schedule?: string;
+}): Promise<QueryResult> {
+    const result = await executeQuery(
+        `UPDATE UserPreferences SET 
+            cleanliness_level = ?, sleep_schedule = ?, pet_friendly = ?,
+            smoking_allowed = ?, noise_tolerance = ?, guests_allowed = ?, work_schedule = ?
+         WHERE user_id = ?`,
+        [
+            prefs.cleanliness_level ?? '', prefs.sleep_schedule ?? '', prefs.pet_friendly ?? '',
+            prefs.smoking_allowed ?? '', prefs.noise_tolerance ?? '', prefs.guests_allowed ?? '',
+            prefs.work_schedule ?? '', userId
+        ],
+        false
+    );
+    invalidateCache('UserPreferences');
+    return result;
+}
+
+export async function updateUserProfile(userId: string, data: {
+    name?: string;
+    email?: string;
+    age?: string;
+    gender?: string;
+    occupation?: string;
+    bio?: string;
+}): Promise<QueryResult> {
+    const result = await executeQuery(
+        `UPDATE User SET name = ?, email = ?, age = ?, gender = ?, occupation = ?, bio = ? WHERE user_id = ?`,
+        [data.name ?? '', data.email ?? '', data.age ?? '', data.gender ?? '', data.occupation ?? '', data.bio ?? '', userId],
+        false
+    );
+    invalidateCache('Users');
+    // Also invalidate localStorage cache
+    const authToken = localStorage.getItem('authToken');
+    if (authToken) {
+        localStorage.removeItem('user:' + authToken);
+    }
+    return result;
+}
+
+export async function updateProfilePhoto(userId: string, dataUrl: string): Promise<QueryResult> {
+    // Try update first, then insert if no rows affected
+    const result = await executeQuery(
+        'UPDATE ProfilePhoto SET data = ? WHERE user_id = ?',
+        [dataUrl, userId],
+        false
+    );
+    invalidateCache('ProfilePhoto');
+    return result;
+}
+
 export async function getProfilePhoto(userId: string): Promise<string | null> {
     const result = await executeQuery('SELECT data FROM ProfilePhoto WHERE user_id = ?', [userId]);
     if (result.success && result.data && result.data.length > 0) {
@@ -196,4 +254,77 @@ export async function getCurrentUser(): Promise<User | null> {
         return user;
     }
     return null;
+}
+
+export async function getActiveListings(): Promise<QueryResult<Listing[]>> {
+    const result = await executeQuery(
+        "SELECT * FROM Listings WHERE is_active = '1' ORDER BY created_at DESC"
+    );
+    console.log('Active listings query result:', result);
+    if (result.success && result.data) {
+        return { success: true, data: result.data.map(arrayToListing) };
+    }
+    return result;
+}
+
+export async function createUserInterest(renterId: string, listingId: string): Promise<QueryResult> {
+    const result = await executeQuery(
+        "INSERT INTO UserInterests (renter_id, listing_id, status, created_at) VALUES (?, ?, 'Pending', ?)",
+        [renterId, listingId, Date.now()],
+        false
+    );
+    invalidateCache('UserInterests');
+    return result;
+}
+
+export async function getListingPhoto(listingId: string): Promise<string | null> {
+    const result = await executeQuery('SELECT data FROM ListingPhotos WHERE listing_id = ?', [listingId]);
+    if (result.success && result.data && result.data.length > 0) {
+        return result.data[0][0];
+    }
+    return null;
+}
+
+export async function getUserListings(userId: string): Promise<QueryResult<Listing[]>> {
+    const result = await executeQuery(
+        'SELECT * FROM Listings WHERE user_id = ? ORDER BY created_at DESC',
+        [userId]
+    );
+    if (result.success && result.data) {
+        return { success: true, data: result.data.map(arrayToListing) };
+    }
+    return result;
+}
+
+export async function getInterestsForListing(listingId: string): Promise<QueryResult<UserInterest[]>> {
+    const result = await executeQuery(
+        'SELECT * FROM UserInterests WHERE listing_id = ? ORDER BY created_at DESC',
+        [listingId]
+    );
+    if (result.success && result.data) {
+        return { success: true, data: result.data.map(arrayToUserInterest) };
+    }
+    return result;
+}
+
+export async function getUnreadMessageCount(userId: string): Promise<number> {
+    const result = await executeQuery(
+        "SELECT COUNT(*) FROM Messages WHERE receiver_id = ? AND read = 'False'",
+        [userId]
+    );
+    if (result.success && result.data && result.data.length > 0) {
+        return Number(result.data[0][0]) || 0;
+    }
+    return 0;
+}
+
+export async function getUserSentInterests(userId: string): Promise<QueryResult<UserInterest[]>> {
+    const result = await executeQuery(
+        'SELECT * FROM UserInterests WHERE renter_id = ? ORDER BY created_at DESC',
+        [userId]
+    );
+    if (result.success && result.data) {
+        return { success: true, data: result.data.map(arrayToUserInterest) };
+    }
+    return result;
 }
