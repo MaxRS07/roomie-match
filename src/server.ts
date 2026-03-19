@@ -1,6 +1,28 @@
 import express from 'express';
 import cors from 'cors';
-import { getAllUsers, getUserById, createUser, updateUser, deleteUser } from './lib/db.js';
+import {
+    getAllUsers,
+    getUserById,
+    createUser,
+    updateUser,
+    deleteUser,
+    authenticateUser,
+    updateUserProfile,
+    getUserPreferences,
+    updateUserPreferences,
+    getProfilePhoto,
+    updateProfilePhoto,
+    getListingPhoto,
+    getActiveListings,
+    getUserListings,
+    createUserInterest,
+    getInterestsForListing,
+    getUserSentInterests,
+    getUserChats,
+    getChatMessages,
+    sendMessage,
+    getUnreadMessageCount,
+} from './lib/db.server.js';
 
 const app = express();
 app.use(cors());
@@ -55,6 +77,143 @@ app.delete('/api/users/:id', async (req, res) => {
     } else {
         res.status(500).json({ error: result.error });
     }
+});
+
+app.post('/api/auth/authenticate', async (req, res) => {
+    const { email, password } = req.body ?? {};
+    const result = await authenticateUser(email, password);
+    if (result.success) {
+        res.json(result.data);
+    } else {
+        res.status(401).json({ error: result.error });
+    }
+});
+
+app.put('/api/users/:id/profile', async (req, res) => {
+    const result = await updateUserProfile(req.params.id, req.body ?? {});
+    if (result.success) {
+        res.json(result.data);
+    } else {
+        res.status(500).json({ error: result.error });
+    }
+});
+
+app.get('/api/users/:id/preferences', async (req, res) => {
+    const result = await getUserPreferences(req.params.id);
+    if (result.success) {
+        res.json(result.data);
+    } else {
+        res.status(500).json({ error: result.error });
+    }
+});
+
+app.put('/api/users/:id/preferences', async (req, res) => {
+    const result = await updateUserPreferences(req.params.id, req.body ?? {});
+    if (result.success) {
+        res.json(result.data);
+    } else {
+        res.status(500).json({ error: result.error });
+    }
+});
+
+app.get('/api/users/:id/profile-photo', async (req, res) => {
+    const data = await getProfilePhoto(req.params.id);
+    res.json({ data });
+});
+
+app.put('/api/users/:id/profile-photo', async (req, res) => {
+    const dataUrl = req.body?.dataUrl;
+    const result = await updateProfilePhoto(req.params.id, dataUrl);
+    if (result.success) {
+        res.json(result.data);
+    } else {
+        res.status(500).json({ error: result.error });
+    }
+});
+
+app.get('/api/listings/active', async (_req, res) => {
+    const result = await getActiveListings();
+    if (result.success) {
+        res.json(result.data);
+    } else {
+        res.status(500).json({ error: result.error });
+    }
+});
+
+app.get('/api/users/:id/listings', async (req, res) => {
+    const result = await getUserListings(req.params.id);
+    if (result.success) {
+        res.json(result.data);
+    } else {
+        res.status(500).json({ error: result.error });
+    }
+});
+
+app.get('/api/listings/:id/photo', async (req, res) => {
+    const data = await getListingPhoto(req.params.id);
+    res.json({ data });
+});
+
+app.post('/api/interests', async (req, res) => {
+    const { renterId, listingId } = req.body ?? {};
+    const result = await createUserInterest(renterId, listingId);
+    if (result.success) {
+        res.json(result.data);
+    } else {
+        res.status(500).json({ error: result.error });
+    }
+});
+
+app.get('/api/listings/:id/interests', async (req, res) => {
+    const result = await getInterestsForListing(req.params.id);
+    if (result.success) {
+        res.json(result.data);
+    } else {
+        res.status(500).json({ error: result.error });
+    }
+});
+
+app.get('/api/users/:id/interests/sent', async (req, res) => {
+    const result = await getUserSentInterests(req.params.id);
+    if (result.success) {
+        res.json(result.data);
+    } else {
+        res.status(500).json({ error: result.error });
+    }
+});
+
+app.get('/api/users/:id/chats', async (req, res) => {
+    const result = await getUserChats(req.params.id);
+    if (result.success) {
+        res.json(result.data);
+    } else {
+        res.status(500).json({ error: result.error });
+    }
+});
+
+app.get('/api/messages/chat', async (req, res) => {
+    const from = String(req.query.from ?? '');
+    const to = String(req.query.to ?? '');
+    const result = await getChatMessages(from, to);
+    if (result.success) {
+        res.json(result.data);
+    } else {
+        res.status(500).json({ error: result.error });
+    }
+});
+
+app.post('/api/messages', async (req, res) => {
+    const result = await sendMessage(req.body);
+    if (result.success) {
+        res.json(result.data);
+    } else {
+        res.status(500).json({ error: result.error });
+    }
+});
+
+app.get('/api/users/:id/messages/unread-count', async (req, res) => {
+    const count = await getUnreadMessageCount(req.params.id);
+    res.json({ count });
 });
 
 app.listen(3000, () => {

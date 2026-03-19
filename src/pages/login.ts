@@ -1,4 +1,4 @@
-import { authenticateUser } from "../lib/db.js";
+import { authenticateUser } from "../lib/db.ts";
 import { router } from "./routes.js";
 
 export const LoginPage = {
@@ -14,6 +14,7 @@ export const LoginPage = {
                     <button type="submit">Login</button>
                 </form>
                 <button id="login-as-guest">Login as Guest</button>
+                <p id="login-error" class="error" aria-live="polite"></p>
             </div>
         `;
 
@@ -26,7 +27,7 @@ export const LoginPage = {
                     localStorage.setItem('user:' + result.data.user_id, JSON.stringify(result.data));
                     router.navigate('dashboard');
                 } else {
-                    alert('Guest login failed');
+                    setLoginError(`Guest login failed: ${result.error ?? 'Unknown error'}`);
                 }
             });
         });
@@ -48,10 +49,16 @@ async function handleLogin(e: Event) {
             localStorage.setItem('user:' + result.data.user_id, JSON.stringify(result.data));
             router.navigate('dashboard');
         } else {
-            alert('Login failed');
+            setLoginError(result.error ? `Login failed: ${result.error}` : 'Login failed');
         }
     }).catch(error => {
         console.error('Login error:', error);
-        alert('An error occurred during login: ' + (error instanceof Error ? error.message : 'Unknown error'));
+        setLoginError('An error occurred during login: ' + (error instanceof Error ? error.message : 'Unknown error'));
     });
+}
+
+function setLoginError(message: string) {
+    const errorEl = document.getElementById('login-error');
+    if (!errorEl) return;
+    errorEl.textContent = message;
 }
