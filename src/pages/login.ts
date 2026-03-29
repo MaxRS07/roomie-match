@@ -21,7 +21,8 @@ export const LoginPage = {
         document.getElementById('login-form')?.addEventListener('submit', handleLogin);
 
         document.getElementById('login-as-guest')?.addEventListener('click', () => {
-            authenticateUser('dsteynor0@mysql.com', 'rrDO36u0wDAJm9pf').then(result => {
+            authenticateUser('dsteynor0@mysql.com', '$2a$04$di9TDfadKUkdFJSlZVZyhO0hDGa42Y1skGrueD9ILj.OHjtqBVI7a').then(result => {
+                console.log(result);
                 if (result.success) {
                     localStorage.setItem('authToken', String(result.data.user_id));
                     localStorage.setItem('user:' + result.data.user_id, JSON.stringify(result.data));

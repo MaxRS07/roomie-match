@@ -1,0 +1,22 @@
+{
+    "_id": {
+        "$oid": "69c6ccce74d407f38607da56"
+    },
+    "_supabase_id": 1,
+    "user_id": {
+        "$oid": "69c6ccce74d407f38607da3c"
+    },
+    "title": "Himalayan Salt Grinder",
+    "description": "Natural pink salt, perfect for seasoning.",
+    "rent_price": 8647.81,
+    "location": "7790 Killdeer Plaza",
+    "city": "Albany",
+    "state": "NY",
+    "zip_code": "12247",
+    "available_date": "10/5/2024",
+    "num_rooms": 10,
+    "num_bathrooms": 4,
+    "is_active": "1",
+    "photos": [],
+    "interests": []
+}

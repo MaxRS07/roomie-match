@@ -1,0 +1,112 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+        "_id": {
+            "type": "object",
+            "properties": {
+                "$oid": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{24}$"
+                }
+            },
+            "required": [
+                "$oid"
+            ]
+        },
+        "_supabase_id": {
+            "type": "integer",
+            "description": "Should likely be UUID v4 -- inconsistent with user schema"
+        },
+        "user_id": {
+            "type": "object",
+            "description": "MongoDB ObjectId ref to owning user",
+            "properties": {
+                "$oid": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{24}$"
+                }
+            },
+            "required": [
+                "$oid"
+            ]
+        },
+        "title": {
+            "type": "string"
+        },
+        "description": {
+            "type": "string"
+        },
+        "rent_price": {
+            "type": "number",
+            "minimum": 0
+        },
+        "location": {
+            "type": "string"
+        },
+        "city": {
+            "type": "string"
+        },
+        "state": {
+            "type": "string",
+            "pattern": "^[A-Z]{2}$"
+        },
+        "zip_code": {
+            "type": "string",
+            "description": "String to preserve leading zeros",
+            "pattern": "^[0-9]{5}(-[0-9]{4})?$"
+        },
+        "available_date": {
+            "type": "string",
+            "description": "M/D/YYYY -- consider ISO 8601",
+            "pattern": "^\\d{1,2}/\\d{1,2}/\\d{4}$"
+        },
+        "num_rooms": {
+            "type": "integer",
+            "minimum": 0
+        },
+        "num_bathrooms": {
+            "type": "integer",
+            "minimum": 0
+        },
+        "is_active": {
+            "type": "string",
+            "description": "'1'/'0' string -- consider boolean",
+            "enum": [
+                "0",
+                "1"
+            ]
+        },
+        "photos": {
+            "type": "array",
+            "items": {
+                "type": "string"
+            }
+        },
+        "interests": {
+            "type": "array",
+            "description": "Shape unknown from empty array",
+            "items": {
+                "type": "object"
+            }
+        }
+    },
+    "required": [
+        "_id",
+        "_supabase_id",
+        "user_id",
+        "title",
+        "description",
+        "rent_price",
+        "location",
+        "city",
+        "state",
+        "zip_code",
+        "available_date",
+        "num_rooms",
+        "num_bathrooms",
+        "is_active",
+        "photos",
+        "interests"
+    ]
+}

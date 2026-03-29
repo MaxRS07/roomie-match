@@ -1,11 +1,10 @@
 import {
     rowToUser, rowToListing, rowToUserInterest, rowToUserPreferences, rowToMessage,
     type Message, type User, type Listing, type UserInterest
-} from '../types/entities.js';
-import type { QueryResult } from '../types/query.js';
+} from '../types/entities.ts';
+import type { QueryResult } from '../types/query.ts';
 import mongodb, { ObjectId } from 'mongodb';
 import { UUID } from 'mongodb';
-import bcrypt from 'bcrypt';
 
 type MongoDoc = Record<string, any>;
 
@@ -199,8 +198,7 @@ export async function authenticateUser(email: string, password: string): Promise
     try {
         const data = await col.findOne({ email });
         if (!data) return { success: false, error: 'User not found' };
-        const match = await bcrypt.compare(password, data.password_hash);
-        if (!match) return { success: false, error: 'Invalid password' };
+        if (password !== data.password_hash) return { success: false, error: 'Invalid password' };
         return { success: true, data: rowToUser({ ...data, user_id: docId(data) }) };
     } catch (e) {
         return { success: false, error: (e as Error).message };

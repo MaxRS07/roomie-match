@@ -1,0 +1,152 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+        "_id": {
+            "type": "object",
+            "description": "MongoDB ObjectId wrapper",
+            "properties": {
+                "$oid": {
+                    "type": "string",
+                    "description": "MongoDB ObjectId hex string (24 chars)",
+                    "pattern": "^[a-f0-9]{24}$"
+                }
+            },
+            "required": [
+                "$oid"
+            ]
+        },
+        "_supabase_id": {
+            "type": "string",
+            "description": "UUID v4 -- Supabase auth user ID",
+            "format": "uuid"
+        },
+        "name": {
+            "type": "string",
+            "description": "Full display name"
+        },
+        "email": {
+            "type": "string"
+        },
+        "password_hash": {
+            "type": "string",
+            "description": "bcrypt hash (prefix $2a$, $2b$, etc.)"
+        },
+        "age": {
+            "type": "string",
+            "pattern": "^[0-9]+$"
+        },
+        "gender": {
+            "type": "string",
+            "description": "Free-text gender identity"
+        },
+        "occupation": {
+            "type": "string",
+            "description": "Job title or role"
+        },
+        "bio": {
+            "type": "string",
+            "description": "Free-text user biography"
+        },
+        "profile_photo": {
+            "type": "string",
+            "description": "Base64-encoded image as a data URI",
+            "pattern": "^data:image\\/[a-zA-Z]+;base64,"
+        },
+        "created_at": {
+            "type": "string"
+        },
+        "preferences": {
+            "type": "object",
+            "description": "Roommate/lifestyle preferences",
+            "properties": {
+                "cleanliness_level": {
+                    "type": "string",
+                    "description": "Tidiness expectation",
+                    "enum": [
+                        "Very tidy",
+                        "Tidy",
+                        "Moderate",
+                        "Relaxed",
+                        "Messy"
+                    ]
+                },
+                "sleep_schedule": {
+                    "type": "string",
+                    "description": "Typical sleep pattern",
+                    "enum": [
+                        "Early bird",
+                        "Night owl",
+                        "9-to-5",
+                        "Irregular"
+                    ]
+                },
+                "pet_friendly": {
+                    "type": "string",
+                    "description": "Pet tolerance level",
+                    "enum": [
+                        "No pets",
+                        "Dogs ok",
+                        "Cats ok",
+                        "All pets ok"
+                    ]
+                },
+                "smoking_allowed": {
+                    "type": "boolean"
+                },
+                "noise_tolerance": {
+                    "type": "string",
+                    "description": "Acceptable noise level",
+                    "enum": [
+                        "Silent",
+                        "Quiet",
+                        "Moderate",
+                        "Lively"
+                    ]
+                },
+                "guests_allowed": {
+                    "type": "string",
+                    "description": "Guest frequency preference",
+                    "enum": [
+                        "No guests",
+                        "Occasional guests",
+                        "Frequent guests"
+                    ]
+                },
+                "work_schedule": {
+                    "type": "string",
+                    "description": "Work pattern",
+                    "enum": [
+                        "9-to-5",
+                        "Remote",
+                        "Night shift",
+                        "Freelance/irregular"
+                    ]
+                }
+            },
+            "required": [
+                "cleanliness_level",
+                "sleep_schedule",
+                "pet_friendly",
+                "smoking_allowed",
+                "noise_tolerance",
+                "guests_allowed",
+                "work_schedule"
+            ]
+        }
+    },
+    "required": [
+        "_id",
+        "_supabase_id",
+        "name",
+        "email",
+        "password_hash",
+        "age",
+        "gender",
+        "occupation",
+        "bio",
+        "profile_photo",
+        "created_at",
+        "preferences"
+    ]
+}

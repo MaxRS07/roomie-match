@@ -1,0 +1,60 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+        "_id": {
+            "type": "object",
+            "properties": {
+                "$oid": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "$oid"
+            ]
+        },
+        "sender_id": {
+            "type": "object",
+            "properties": {
+                "$oid": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "$oid"
+            ]
+        },
+        "receiver_id": {
+            "type": "object",
+            "properties": {
+                "$oid": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "$oid"
+            ]
+        },
+        "content": {
+            "type": "string"
+        },
+        "sent_at": {
+            "type": "string"
+        },
+        "read": {
+            "type": "string",
+            "enum": [
+                "True",
+                "False"
+            ]
+        }
+    },
+    "required": [
+        "_id",
+        "sender_id",
+        "receiver_id",
+        "content",
+        "sent_at",
+        "read"
+    ]
+}

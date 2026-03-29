@@ -22,7 +22,7 @@ import {
     getChatMessages,
     sendMessage,
     getUnreadMessageCount,
-} from './lib/db.server.js';
+} from './lib/db.server.ts';
 
 const app = express();
 app.use(cors());

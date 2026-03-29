@@ -1,4 +1,9 @@
+import './styles/global.css';
 import './styles/login.css';
+import './styles/dashboard.css';
+import './styles/matches.css';
+import './styles/messages.css';
+import './styles/profile.css';
 import { router } from './pages/routes.js';
 import { LoginPage } from './pages/login.js';
 import { DashboardPage } from './pages/dashboard.js';
