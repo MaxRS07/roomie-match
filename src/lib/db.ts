@@ -1,9 +1,7 @@
 import type { QueryResult } from '../types/query.js';
 import type { Message, User, Listing, UserInterest } from '../types/entities.js';
 
-const API_BASE = (typeof window !== 'undefined' && window.location.port === '5173')
-    ? 'http://localhost:3000/api'
-    : '/api';
+const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? '/api';
 
 async function apiRequest<T = any>(path: string, init?: RequestInit): Promise<T> {
     const response = await fetch(`${API_BASE}${path}`, {

@@ -190,6 +190,21 @@ export function rowToMessage(row: any): Message {
     };
 }
 
+export function rowToListingPhoto(row: any): ListingPhoto {
+    return {
+        photo_id: row.photo_id,
+        listing_id: row.listing_id,
+        data: row.data,
+    };
+}
+
+export function rowToProfilePhoto(row: any): ProfilePhoto {
+    return {
+        photo_id: row.photo_id,
+        user_id: row.user_id,
+        data: row.data,
+    };
+}
 // ─── Legacy aliases so existing page imports don't break ─────────────────────
 // Pages call arrayToUser(resp.data[0]) — since data[0] is now already a mapped
 // User object (not a raw array), these just return the object as-is.

@@ -1,5 +1,15 @@
 import { defineConfig } from "vite";
 
+const isDev = process.env.NODE_ENV !== 'production';
+
 export default defineConfig({
-    base: "/roomie-match/", // must match your GitHub repo name
+    base: isDev ? '/' : '/roomie-match/',
+    server: {
+        proxy: {
+            '/api': {
+                target: 'http://localhost:3000',
+                changeOrigin: true
+            }
+        }
+    }
 });

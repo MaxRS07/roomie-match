@@ -3,234 +3,223 @@ import {
     type Message, type User, type Listing, type UserInterest
 } from '../types/entities.js';
 import type { QueryResult } from '../types/query.js';
-import mongodb from 'mongodb';
+import mongodb, { ObjectId } from 'mongodb';
 import { UUID } from 'mongodb';
+import bcrypt from 'bcrypt';
 
 type MongoDoc = Record<string, any>;
 
-const userIdentifier = (doc: MongoDoc): string => String(doc._id ?? '');
+// ─── Connection Pool ──────────────────────────────────────────────────────────
+
+let _client: mongodb.MongoClient | null = null;
+
+const getClient = async (): Promise<mongodb.MongoClient | null> => {
+    if (_client) return _client;
+    try {
+        _client = await new mongodb.MongoClient('mongodb://localhost:27017').connect();
+        return _client;
+    } catch {
+        console.error('Failed to connect to MongoDB at mongodb://localhost:27017');
+        return null;
+    }
+};
+
+const getDb = async (): Promise<mongodb.Db | null> => {
+    const client = await getClient();
+    return client ? client.db('roomie-match') : null;
+};
+
+const usersCollection = async (): Promise<mongodb.Collection | null> => {
+    const db = await getDb();
+    return db ? db.collection('users') : null;
+};
+
+const listingsCollection = async (): Promise<mongodb.Collection | null> => {
+    const db = await getDb();
+    return db ? db.collection('listings') : null;
+};
+
+const messagesCollection = async (): Promise<mongodb.Collection | null> => {
+    const db = await getDb();
+    return db ? db.collection('messages') : null;
+};
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const toObjectId = (id: string): mongodb.ObjectId | null => (
     mongodb.ObjectId.isValid(id) ? new mongodb.ObjectId(id) : null
 );
 
-const listingIdentifier = (ownerId: string, listing: MongoDoc, index: number): string =>
-    String(listing.listing_id ?? `${ownerId}:${index}`);
+const docId = (doc: MongoDoc): string => String(doc._id ?? '');
 
-const isUnreadValue = (value: unknown): boolean => {
+const normalizePreferenceRow = (user: MongoDoc): MongoDoc => {
+    const prefs = user.preferences ?? {};
+    return {
+        preference_id: prefs.preference_id ?? docId(user),
+        user_id: docId(user),
+        cleanliness_level: prefs.cleanliness_level ?? '',
+        sleep_schedule: prefs.sleep_schedule ?? '',
+        pet_friendly: prefs.pet_friendly ?? '',
+        smoking_allowed: prefs.smoking_allowed ?? '',
+        noise_tolerance: prefs.noise_tolerance ?? '',
+        guests_allowed: prefs.guests_allowed ?? '',
+        work_schedule: prefs.work_schedule ?? ''
+    };
+};
+
+const normalizeListing = (doc: MongoDoc): MongoDoc => ({
+    listing_id: docId(doc),
+    user_id: String(doc.user_id ?? ''),
+    title: doc.title ?? '',
+    description: doc.description ?? '',
+    rent_price: String(doc.rent_price ?? ''),
+    location: doc.location ?? '',
+    city: doc.city ?? '',
+    state: doc.state ?? '',
+    zip_code: doc.zip_code ?? '',
+    available_date: doc.available_date ?? '',
+    num_rooms: String(doc.num_rooms ?? ''),
+    num_bathrooms: String(doc.num_bathrooms ?? ''),
+    is_active: doc.is_active ?? 'FALSE',
+    created_at: doc.created_at ?? Date.now()
+});
+
+const normalizeInterest = (doc: MongoDoc, listingId: string): MongoDoc => ({
+    interest_id: docId(doc) || doc.interest_id || new UUID().toString(),
+    renter_id: String(doc.renter_id ?? ''),
+    listing_id: listingId,
+    status: doc.status ?? 'Pending',
+    created_at: doc.created_at ?? Date.now()
+});
+
+const normalizeMessage = (doc: MongoDoc): MongoDoc => ({
+    message_id: docId(doc),
+    sender_id: String(doc.sender_id ?? ''),
+    receiver_id: String(doc.receiver_id ?? ''),
+    content: doc.content ?? '',
+    sent_at: doc.sent_at ?? new Date().toISOString(),
+    read: typeof doc.read === 'boolean' ? (doc.read ? 'True' : 'False') : (doc.read ?? 'False')
+});
+
+const isUnread = (value: unknown): boolean => {
     if (typeof value === 'boolean') return value === false;
     if (typeof value === 'string') return value.toLowerCase() === 'false';
     return false;
 };
 
-const parseSyntheticListingId = (listingId: string): { ownerId: string; index: number } | null => {
-    const parts = listingId.split(':');
-    if (parts.length !== 2) return null;
-    const index = Number(parts[1]);
-    if (!Number.isInteger(index) || index < 0) return null;
-    return { ownerId: parts[0]!, index };
-};
-
-const normalizePreferenceRow = (user: MongoDoc): MongoDoc => {
-    const prefs = user.preferences ?? {};
-    return {
-        preference_id: prefs.preference_id ?? user.preference_id ?? userIdentifier(user),
-        user_id: userIdentifier(user),
-        cleanliness_level: prefs.cleanliness_level ?? user.cleanliness_level ?? '',
-        sleep_schedule: prefs.sleep_schedule ?? user.sleep_schedule ?? '',
-        pet_friendly: prefs.pet_friendly ?? user.pet_friendly ?? '',
-        smoking_allowed: prefs.smoking_allowed ?? user.smoking_allowed ?? '',
-        noise_tolerance: prefs.noise_tolerance ?? user.noise_tolerance ?? '',
-        guests_allowed: prefs.guests_allowed ?? user.guests_allowed ?? '',
-        work_schedule: prefs.work_schedule ?? user.work_schedule ?? ''
-    };
-};
-
-const normalizeListingRow = (owner: MongoDoc, listing: MongoDoc, index: number): MongoDoc => {
-    const ownerId = userIdentifier(owner);
-    return {
-        listing_id: listingIdentifier(ownerId, listing, index),
-        user_id: ownerId,
-        title: listing.title ?? '',
-        description: listing.description ?? '',
-        rent_price: String(listing.rent_price ?? ''),
-        location: listing.location ?? '',
-        city: listing.city ?? '',
-        state: listing.state ?? '',
-        zip_code: listing.zip_code ?? '',
-        available_date: listing.available_date ?? '',
-        num_rooms: String(listing.num_rooms ?? ''),
-        num_bathrooms: String(listing.num_bathrooms ?? ''),
-        is_active: listing.is_active ?? 'FALSE',
-        created_at: listing.created_at ?? owner.created_at ?? Date.now()
-    };
-};
-
-const normalizeInterestRow = (owner: MongoDoc, listing: MongoDoc, interest: MongoDoc, index: number): MongoDoc => {
-    const ownerId = userIdentifier(owner);
-    const listingId = listingIdentifier(ownerId, listing, index);
-    return {
-        interest_id: interest.interest_id ?? new UUID().toString(),
-        renter_id: interest.renter_id ?? '',
-        listing_id: interest.listing_id ?? listingId,
-        status: interest.status ?? 'Pending',
-        created_at: interest.created_at ?? Date.now()
-    };
-};
-
-const normalizeMessageRow = (sender: MongoDoc, message: MongoDoc, index: number): MongoDoc => {
-    const senderId = userIdentifier(sender);
-    return {
-        message_id: message.message_id ?? `${senderId}:${index}:${message.sent_at ?? Date.now()}`,
-        sender_id: senderId,
-        receiver_id: message.receiver_id ?? '',
-        content: message.content ?? '',
-        sent_at: message.sent_at ?? new Date().toISOString(),
-        read: typeof message.read === 'boolean' ? (message.read ? 'True' : 'False') : (message.read ?? 'False')
-    };
-};
 // ─── Users ────────────────────────────────────────────────────────────────────
 
-const usersCollection = async (): Promise<mongodb.Collection | null> => {
-    const client = await new mongodb.MongoClient('mongodb://localhost:27017').connect();
-    if (!client) {
-        console.error('Failed to connect to MongoDB, ensure MongoDB is running and accessible at mongodb://localhost:27017');
-        return null;
-    }
-    const collection = client.db('roomie-match').collection('users');
-    return collection;
-}
-
 export async function getAllUsers(): Promise<QueryResult<User[]>> {
-    const users = await usersCollection();
-    if (!users) return { success: false, error: 'Failed to connect to database' };
-
+    const col = await usersCollection();
+    if (!col) return { success: false, error: 'Failed to connect to database' };
     try {
-        const data = await users.find().toArray();
-        const mapped = data.map((row: MongoDoc) => rowToUser({ ...row, user_id: userIdentifier(row) }));
-        return { success: true, data: mapped };
-    } catch (error) {
-        return { success: false, error: (error as Error).message };
+        const data = await col.find().toArray();
+        return { success: true, data: data.map(d => rowToUser({ ...d, user_id: docId(d) })) };
+    } catch (e) {
+        return { success: false, error: (e as Error).message };
     }
 }
 
 export async function getUserById(userId: string): Promise<QueryResult<User[]>> {
-    const users = await usersCollection();
-    if (!users) return { success: false, error: 'Failed to connect to database' };
-
+    const col = await usersCollection();
+    if (!col) return { success: false, error: 'Failed to connect to database' };
     try {
-        const objectId = toObjectId(userId);
-        if (!objectId) return { success: false, error: 'Invalid user id' };
-
-        const data = await users.findOne({ _id: objectId });
+        const oid = toObjectId(userId);
+        if (!oid) return { success: false, error: 'Invalid user id' };
+        const data = await col.findOne({ _id: oid });
         if (!data) return { success: false, error: 'User not found' };
-        return { success: true, data: [rowToUser({ ...data, user_id: userIdentifier(data) })] };
-    } catch (error) {
-        return { success: false, error: (error as Error).message };
+        return { success: true, data: [rowToUser({ ...data, user_id: docId(data) })] };
+    } catch (e) {
+        return { success: false, error: (e as Error).message };
     }
 }
 
-export async function createUser(userData: { name: string; email: string; password_hash: string; age?: string; gender?: string; occupation?: string; bio?: string }): Promise<QueryResult> {
-    const users = await usersCollection();
-    if (!users) return { success: false, error: 'Failed to connect to database' };
-
+export async function createUser(userData: {
+    name: string; email: string; password_hash: string;
+    age?: string; gender?: string; occupation?: string; bio?: string;
+}): Promise<QueryResult> {
+    const col = await usersCollection();
+    if (!col) return { success: false, error: 'Failed to connect to database' };
     try {
-        const doc = {
-            ...userData,
-            created_at: Date.now(),
-            preferences: {},
-            listings: [],
-            sent_messages: []
-        };
-        const insertResult = await users.insertOne(doc);
-        return { success: true, data: [rowToUser({ ...doc, _id: insertResult.insertedId, user_id: String(insertResult.insertedId) })] };
-    } catch (error) {
-        return { success: false, error: (error as Error).message };
+        const doc = { ...userData, created_at: Date.now(), preferences: {} };
+        const result = await col.insertOne(doc);
+        return { success: true, data: [rowToUser({ ...doc, _id: result.insertedId, user_id: String(result.insertedId) })] };
+    } catch (e) {
+        return { success: false, error: (e as Error).message };
     }
 }
 
 export async function updateUser(userId: string, userData: Partial<{ name: string; email: string; preferences: any }>): Promise<QueryResult> {
-    const users = await usersCollection();
-    if (!users) return { success: false, error: 'Failed to connect to database' };
-
+    const col = await usersCollection();
+    if (!col) return { success: false, error: 'Failed to connect to database' };
     try {
-        const objectId = toObjectId(userId);
-        if (!objectId) return { success: false, error: 'Invalid user id' };
-
-        const result = await users.findOneAndUpdate(
-            { _id: objectId },
-            { $set: userData },
-            { returnDocument: 'after' }
-        );
+        const oid = toObjectId(userId);
+        if (!oid) return { success: false, error: 'Invalid user id' };
+        const result = await col.findOneAndUpdate({ _id: oid }, { $set: userData }, { returnDocument: 'after' });
         if (!result) return { success: false, error: 'User not found' };
-        return { success: true, data: [rowToUser({ ...result, user_id: userIdentifier(result) })] };
-    } catch (error) {
-        return { success: false, error: (error as Error).message };
+        return { success: true, data: [rowToUser({ ...result, user_id: docId(result) })] };
+    } catch (e) {
+        return { success: false, error: (e as Error).message };
     }
 }
 
 export async function updateUserProfile(userId: string, data: {
     name?: string; email?: string; age?: string; gender?: string; occupation?: string; bio?: string;
 }): Promise<QueryResult> {
-    const users = await usersCollection();
-    if (!users) return { success: false, error: 'Failed to retrieve user' };
-
+    const col = await usersCollection();
+    if (!col) return { success: false, error: 'Failed to connect to database' };
     try {
-        const objectId = toObjectId(userId);
-        if (!objectId) return { success: false, error: 'Invalid user id' };
-
-        const result = await users.updateOne({ _id: objectId }, { $set: data });
+        const oid = toObjectId(userId);
+        if (!oid) return { success: false, error: 'Invalid user id' };
+        const result = await col.updateOne({ _id: oid }, { $set: data });
         if (result.matchedCount === 0) return { success: false, error: 'User not found' };
         return { success: true, data: { affected: result.modifiedCount } };
-    } catch (error) {
-        return { success: false, error: (error as Error).message };
+    } catch (e) {
+        return { success: false, error: (e as Error).message };
     }
 }
 
 export async function deleteUser(userId: string): Promise<QueryResult> {
-    const users = await usersCollection();
-    if (!users) return { success: false, error: 'Failed to connect to database' };
-
+    const col = await usersCollection();
+    if (!col) return { success: false, error: 'Failed to connect to database' };
     try {
-        const objectId = toObjectId(userId);
-        if (!objectId) return { success: false, error: 'Invalid user id' };
-
-        const result = await users.deleteOne({ _id: objectId });
+        const oid = toObjectId(userId);
+        if (!oid) return { success: false, error: 'Invalid user id' };
+        const result = await col.deleteOne({ _id: oid });
         if (result.deletedCount === 0) return { success: false, error: 'User not found' };
         return { success: true, data: { affected: result.deletedCount } };
-    } catch (error) {
-        return { success: false, error: (error as Error).message };
+    } catch (e) {
+        return { success: false, error: (e as Error).message };
     }
 }
 
 export async function authenticateUser(email: string, password: string): Promise<{ success: boolean; data?: any; error?: string }> {
-    const users = await usersCollection();
-    if (!users) return { success: false, error: 'Failed to retrieve user' };
-
+    const col = await usersCollection();
+    if (!col) return { success: false, error: 'Failed to connect to database' };
     try {
-        const data = await users.findOne({ email, password_hash: password });
+        const data = await col.findOne({ email });
         if (!data) return { success: false, error: 'User not found' };
-        return { success: true, data: rowToUser({ ...data, user_id: userIdentifier(data) }) };
-    } catch (error) {
-        return { success: false, error: (error as Error).message };
+        const match = await bcrypt.compare(password, data.password_hash);
+        if (!match) return { success: false, error: 'Invalid password' };
+        return { success: true, data: rowToUser({ ...data, user_id: docId(data) }) };
+    } catch (e) {
+        return { success: false, error: (e as Error).message };
     }
 }
 
 // ─── User Preferences ─────────────────────────────────────────────────────────
 
 export async function getUserPreferences(userId: string): Promise<QueryResult> {
-    const users = await usersCollection();
-    if (!users) return { success: false, error: 'Failed to connect to database' };
-
+    const col = await usersCollection();
+    if (!col) return { success: false, error: 'Failed to connect to database' };
     try {
-        const objectId = toObjectId(userId);
-        if (!objectId) return { success: false, error: 'Invalid user id' };
-
-        const data = await users.findOne({ _id: objectId }, { projection: { _id: 1, preferences: 1 } });
+        const oid = toObjectId(userId);
+        if (!oid) return { success: false, error: 'Invalid user id' };
+        const data = await col.findOne({ _id: oid }, { projection: { _id: 1, preferences: 1 } });
         if (!data) return { success: false, error: 'User not found' };
         return { success: true, data: [rowToUserPreferences(normalizePreferenceRow(data))] };
-    } catch (error) {
-        return { success: false, error: (error as Error).message };
+    } catch (e) {
+        return { success: false, error: (e as Error).message };
     }
 }
 
@@ -238,86 +227,60 @@ export async function updateUserPreferences(userId: string, prefs: {
     cleanliness_level?: string; sleep_schedule?: string; pet_friendly?: string;
     smoking_allowed?: string; noise_tolerance?: string; guests_allowed?: string; work_schedule?: string;
 }): Promise<QueryResult> {
-    const users = await usersCollection();
-    if (!users) return { success: false, error: 'Failed to connect to database' };
-
+    const col = await usersCollection();
+    if (!col) return { success: false, error: 'Failed to connect to database' };
     try {
-        const objectId = toObjectId(userId);
-        if (!objectId) return { success: false, error: 'Invalid user id' };
-
-        const result = await users.updateOne({ _id: objectId }, { $set: { preferences: prefs } });
+        const oid = toObjectId(userId);
+        if (!oid) return { success: false, error: 'Invalid user id' };
+        const result = await col.updateOne({ _id: oid }, { $set: { preferences: prefs } });
         if (result.matchedCount === 0) return { success: false, error: 'User not found' };
         return { success: true, data: { affected: result.modifiedCount } };
-    } catch (error) {
-        return { success: false, error: (error as Error).message };
+    } catch (e) {
+        return { success: false, error: (e as Error).message };
     }
 }
 
 // ─── Photos ───────────────────────────────────────────────────────────────────
 
 export async function getProfilePhoto(userId: string): Promise<string | null> {
-    const users = await usersCollection();
-    if (!users) return null;
-
+    const col = await usersCollection();
+    if (!col) return null;
     try {
-        const objectId = toObjectId(userId);
-        if (!objectId) return null;
-
-        const data = await users.findOne({ _id: objectId }, { projection: { profile_photo: 1 } });
-        if (!data) return null;
-        return data.profile_photo ?? null;
-    } catch (error) {
+        const oid = toObjectId(userId);
+        if (!oid) return null;
+        const data = await col.findOne({ _id: oid }, { projection: { profile_photo: 1 } });
+        return data?.profile_photo ?? null;
+    } catch {
         return null;
     }
 }
 
 export async function updateProfilePhoto(userId: string, dataUrl: string): Promise<QueryResult> {
-    const users = await usersCollection();
-    if (!users) return { success: false, error: 'Failed to connect to database' };
-
+    const col = await usersCollection();
+    if (!col) return { success: false, error: 'Failed to connect to database' };
     try {
-        const objectId = toObjectId(userId);
-        if (!objectId) return { success: false, error: 'Invalid user id' };
-
-        const result = await users.updateOne({ _id: objectId }, { $set: { profile_photo: dataUrl } });
+        const oid = toObjectId(userId);
+        if (!oid) return { success: false, error: 'Invalid user id' };
+        const result = await col.updateOne({ _id: oid }, { $set: { profile_photo: dataUrl } });
         if (result.matchedCount === 0) return { success: false, error: 'User not found' };
         return { success: true, data: { affected: result.modifiedCount } };
-    } catch (error) {
-        return { success: false, error: (error as Error).message };
+    } catch (e) {
+        return { success: false, error: (e as Error).message };
     }
 }
 
 export async function getListingPhoto(listingId: string): Promise<string | null> {
-    const users = await usersCollection();
-    if (!users) return null;
-
+    const col = await listingsCollection();
+    if (!col) return null;
     try {
-        const withNativeId = await users.findOne(
-            { 'listings.listing_id': listingId },
-            { projection: { listings: 1 } }
-        );
-
-        if (withNativeId?.listings) {
-            const listing = withNativeId.listings.find((row: MongoDoc) => row.listing_id === listingId);
-            if (!listing) return null;
-            return listing.photo_data ?? listing.photo ?? listing.image ?? null;
-        }
-
-        const synthetic = parseSyntheticListingId(listingId);
-        if (!synthetic) return null;
-
-        const ownerObjectId = toObjectId(synthetic.ownerId);
-        if (!ownerObjectId) return null;
-
-        const owner = await users.findOne(
-            { _id: ownerObjectId },
-            { projection: { listings: 1 } }
-        );
-
-        const listing = owner?.listings?.[synthetic.index];
-        if (!listing) return null;
-        return listing.photo_data ?? listing.photo ?? listing.image ?? null;
-    } catch (error) {
+        const oid = toObjectId(listingId);
+        if (!oid) return null;
+        const doc = await col.findOne({ _id: oid }, { projection: { photos: 1, photo_data: 1 } });
+        if (!doc) return null;
+        // photos is an array of base64 strings from the port script
+        if (Array.isArray(doc.photos) && doc.photos.length > 0) return doc.photos[0];
+        return doc.photo_data ?? null;
+    } catch {
         return null;
     }
 }
@@ -325,299 +288,308 @@ export async function getListingPhoto(listingId: string): Promise<string | null>
 // ─── Listings ─────────────────────────────────────────────────────────────────
 
 export async function getActiveListings(): Promise<QueryResult<Listing[]>> {
-    const users = await usersCollection();
-    if (!users) return { success: false, error: 'Failed to connect to database' };
-
+    const col = await listingsCollection();
+    if (!col) return { success: false, error: 'Failed to connect to database' };
     try {
-        const ownerDocs = await users.find({}, { projection: { _id: 1, created_at: 1, listings: 1 } }).toArray();
-        const allListings: Listing[] = [];
-
-        for (const owner of ownerDocs) {
-            const listings = Array.isArray(owner.listings) ? owner.listings : [];
-            listings.forEach((listing: MongoDoc, index: number) => {
-                const normalized = normalizeListingRow(owner, listing, index);
-                const active = String(normalized.is_active).toUpperCase();
-                if (active === 'TRUE' || active === '1') {
-                    allListings.push(rowToListing(normalized));
-                }
-            });
-        }
-
-        allListings.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0));
-        return { success: true, data: allListings };
-    } catch (error) {
-        return { success: false, error: (error as Error).message };
+        // is_active may be stored as 'TRUE'/'FALSE' string or boolean
+        const docs = await col.find({
+            $or: [
+                { is_active: 'TRUE' },
+                { is_active: true },
+                { is_active: '1' },
+                { is_active: 1 }
+            ]
+        }).sort({ created_at: -1 }).toArray();
+        return { success: true, data: docs.map(d => rowToListing(normalizeListing(d))) };
+    } catch (e) {
+        return { success: false, error: (e as Error).message };
     }
 }
 
 export async function getUserListings(userId: string): Promise<QueryResult<Listing[]>> {
-    const users = await usersCollection();
-    if (!users) return { success: false, error: 'Failed to connect to database' };
-
+    const col = await listingsCollection();
+    if (!col) return { success: false, error: 'Failed to connect to database' };
     try {
-        const ownerObjectId = toObjectId(userId);
-        if (!ownerObjectId) return { success: false, error: 'Invalid user id' };
+        const oid = toObjectId(userId);
+        // user_id in listings may be stored as ObjectId or string (_supabase_id era)
+        const query = oid
+            ? { $or: [{ user_id: oid }, { user_id: userId }] }
+            : { user_id: userId };
+        const docs = await col.find(query).sort({ created_at: -1 }).toArray();
+        return { success: true, data: docs.map(d => rowToListing(normalizeListing(d))) };
+    } catch (e) {
+        return { success: false, error: (e as Error).message };
+    }
+}
 
-        const owner = await users.findOne(
-            { _id: ownerObjectId },
-            { projection: { _id: 1, created_at: 1, listings: 1 } }
-        );
-        if (!owner) return { success: true, data: [] };
+export async function createListing(userId: string, listingData: {
+    title: string; description: string; rent_price: string; location: string;
+    city: string; state: string; zip_code: string; available_date: string;
+    num_rooms: string; num_bathrooms: string;
+}): Promise<QueryResult<Listing[]>> {
+    const col = await listingsCollection();
+    if (!col) return { success: false, error: 'Failed to connect to database' };
+    try {
+        const oid = toObjectId(userId);
+        const doc = {
+            ...listingData,
+            user_id: oid ?? userId,
+            is_active: 'TRUE',
+            interests: [],
+            photos: [],
+            created_at: Date.now()
+        };
+        const result = await col.insertOne(doc);
+        return { success: true, data: [rowToListing(normalizeListing({ ...doc, _id: result.insertedId }))] };
+    } catch (e) {
+        return { success: false, error: (e as Error).message };
+    }
+}
 
-        const listings = (owner.listings ?? []).map((listing: MongoDoc, index: number) =>
-            rowToListing(normalizeListingRow(owner, listing, index))
-        );
-
-        listings.sort((a: Listing, b: Listing) => (b.created_at ?? 0) - (a.created_at ?? 0));
-        return { success: true, data: listings };
-    } catch (error) {
-        return { success: false, error: (error as Error).message };
+export async function updateListing(listingId: string, data: Partial<{
+    title: string; description: string; rent_price: string; location: string;
+    city: string; state: string; zip_code: string; available_date: string;
+    num_rooms: string; num_bathrooms: string; is_active: string;
+}>): Promise<QueryResult> {
+    const col = await listingsCollection();
+    if (!col) return { success: false, error: 'Failed to connect to database' };
+    try {
+        const oid = toObjectId(listingId);
+        if (!oid) return { success: false, error: 'Invalid listing id' };
+        const result = await col.updateOne({ _id: oid }, { $set: data });
+        if (result.matchedCount === 0) return { success: false, error: 'Listing not found' };
+        return { success: true, data: { affected: result.modifiedCount } };
+    } catch (e) {
+        return { success: false, error: (e as Error).message };
     }
 }
 
 // ─── User Interests ───────────────────────────────────────────────────────────
+// Interests are stored as an embedded array inside each listing document.
 
 export async function createUserInterest(renterId: string, listingId: string): Promise<QueryResult> {
-    const users = await usersCollection();
-    if (!users) return { success: false, error: 'Failed to connect to database' };
-
+    const col = await listingsCollection();
+    if (!col) return { success: false, error: 'Failed to connect to database' };
     try {
+        const oid = toObjectId(listingId);
+        if (!oid) return { success: false, error: 'Invalid listing id' };
         const payload = {
-            interest_id: new UUID().toString(),
+            _id: new mongodb.ObjectId(),
             renter_id: renterId,
-            listing_id: listingId,
             status: 'Pending',
             created_at: Date.now()
         };
-
-        const byNativeListingId = await users.updateOne(
-            { 'listings.listing_id': listingId },
-            { $push: { 'listings.$.interests': payload } as any }
-        );
-
-        if (byNativeListingId.matchedCount > 0) {
-            return { success: true, data: { affected: byNativeListingId.modifiedCount } };
-        }
-
-        const synthetic = parseSyntheticListingId(listingId);
-        if (!synthetic) return { success: false, error: 'Listing not found' };
-
-        const ownerObjectId = toObjectId(synthetic.ownerId);
-        if (!ownerObjectId) return { success: false, error: 'Listing not found' };
-
-        const owner = await users.findOne(
-            { _id: ownerObjectId },
-            { projection: { listings: 1 } }
-        );
-        if (!owner?.listings?.[synthetic.index]) return { success: false, error: 'Listing not found' };
-
-        const fieldPath = `listings.${synthetic.index}.interests`;
-        const fallbackUpdate = await users.updateOne(
-            { _id: ownerObjectId },
-            { $push: { [fieldPath]: payload } as any }
-        );
-
-        return { success: true, data: { affected: fallbackUpdate.modifiedCount } };
-    } catch (error) {
-        return { success: false, error: (error as Error).message };
+        const result = await col.updateOne({ _id: oid }, { $push: { interests: payload } as any });
+        if (result.matchedCount === 0) return { success: false, error: 'Listing not found' };
+        return { success: true, data: { affected: result.modifiedCount } };
+    } catch (e) {
+        return { success: false, error: (e as Error).message };
     }
 }
 
 export async function getInterestsForListing(listingId: string): Promise<QueryResult<UserInterest[]>> {
-    const users = await usersCollection();
-    if (!users) return { success: false, error: 'Failed to connect to database' };
-
+    const col = await listingsCollection();
+    if (!col) return { success: false, error: 'Failed to connect to database' };
     try {
-        let owner = await users.findOne(
-            { 'listings.listing_id': listingId },
-            { projection: { _id: 1, listings: 1 } }
-        );
-        let listing: MongoDoc | undefined;
-        let listingIndex = 0;
-
-        if (owner?.listings) {
-            listingIndex = owner.listings.findIndex((row: MongoDoc) => row.listing_id === listingId);
-            listing = listingIndex >= 0 ? owner.listings[listingIndex] : undefined;
-        }
-
-        if (!listing) {
-            const synthetic = parseSyntheticListingId(listingId);
-            if (!synthetic) return { success: true, data: [] };
-
-            const ownerObjectId = toObjectId(synthetic.ownerId);
-            if (!ownerObjectId) return { success: true, data: [] };
-
-            owner = await users.findOne(
-                { _id: ownerObjectId },
-                { projection: { _id: 1, listings: 1 } }
-            );
-            listingIndex = synthetic.index;
-            listing = owner?.listings?.[synthetic.index];
-        }
-
-        if (!owner || !listing) return { success: true, data: [] };
-
-        const interests = (listing.interests ?? [])
-            .map((interest: MongoDoc) => rowToUserInterest(normalizeInterestRow(owner as MongoDoc, listing as MongoDoc, interest, listingIndex)))
-            .sort((a: UserInterest, b: UserInterest) => b.created_at - a.created_at);
-
+        const oid = toObjectId(listingId);
+        if (!oid) return { success: true, data: [] };
+        const doc = await col.findOne({ _id: oid }, { projection: { interests: 1 } });
+        if (!doc) return { success: true, data: [] };
+        const interests = (doc.interests ?? []).map((i: MongoDoc) => rowToUserInterest(normalizeInterest(i, listingId)));
+        interests.sort((a: UserInterest, b: UserInterest) => b.created_at - a.created_at);
         return { success: true, data: interests };
-    } catch (error) {
-        return { success: false, error: (error as Error).message };
+    } catch (e) {
+        return { success: false, error: (e as Error).message };
     }
 }
 
 export async function getUserSentInterests(userId: string): Promise<QueryResult<UserInterest[]>> {
-    const users = await usersCollection();
-    if (!users) return { success: false, error: 'Failed to connect to database' };
-
+    const col = await listingsCollection();
+    if (!col) return { success: false, error: 'Failed to connect to database' };
     try {
-        const ownerDocs = await users.find({}, { projection: { _id: 1, listings: 1 } }).toArray();
+        // renter_id may be stored as ObjectId or string
+        const oid = toObjectId(userId);
+        const query = oid
+            ? { $or: [{ 'interests.renter_id': oid }, { 'interests.renter_id': userId }] }
+            : { 'interests.renter_id': userId };
+
+        const docs = await col.find(query, { projection: { _id: 1, interests: 1 } }).toArray();
         const sent: UserInterest[] = [];
 
-        for (const owner of ownerDocs) {
-            const listings = owner.listings ?? [];
-            listings.forEach((listing: MongoDoc, listingIndex: number) => {
-                const interests = listing.interests ?? [];
-                interests.forEach((interest: MongoDoc) => {
-                    if ((interest.renter_id ?? '') === userId) {
-                        sent.push(rowToUserInterest(normalizeInterestRow(owner as MongoDoc, listing, interest, listingIndex)));
-                    }
-                });
-            });
+        for (const listing of docs) {
+            const listingId = docId(listing);
+            for (const interest of (listing.interests ?? [])) {
+                const rid = String(interest.renter_id ?? '');
+                if (rid === userId || (oid && rid === String(oid))) {
+                    sent.push(rowToUserInterest(normalizeInterest(interest, listingId)));
+                }
+            }
         }
 
         sent.sort((a, b) => b.created_at - a.created_at);
         return { success: true, data: sent };
-    } catch (error) {
-        return { success: false, error: (error as Error).message };
+    } catch (e) {
+        return { success: false, error: (e as Error).message };
     }
 }
 
 // ─── Messages ─────────────────────────────────────────────────────────────────
+// Messages are stored in a separate 'messages' collection.
+
+export async function getConversationWithProfiles(userAId: string, userBId: string) {
+    const messages = await messagesCollection();
+    const users = await usersCollection();
+    if (!messages || !users) throw new Error('Failed to connect to database');
+
+    const aOid = new ObjectId(userAId);
+    const bOid = new ObjectId(userBId);
+
+    // Find 1: fetch both user profiles in a single query using $in
+    const profiles = await users.find(
+        { _id: { $in: [aOid, bOid] } },
+        { projection: { _id: 1, name: 1, profile_photo: 1 } }
+    ).toArray();
+
+    // Index by string id for O(1) lookup when annotating messages
+    const profileMap = new Map(
+        profiles.map(p => [p._id.toString(), p])
+    );
+
+    // Find 2: all messages between the two users in either direction
+    const thread = await messages.find(
+        {
+            $or: [
+                { sender_id: aOid, receiver_id: bOid },
+                { sender_id: bOid, receiver_id: aOid }
+            ]
+        },
+        {
+            projection: { content: 1, sent_at: 1, read: 1, sender_id: 1, receiver_id: 1 },
+            sort: { sent_at: 1 }
+        }
+    ).toArray();
+
+    // Annotate each message with sender/receiver profile data in JS
+    // -- avoids a third round trip or a $lookup
+    return thread.map(msg => ({
+        ...msg,
+        sender: profileMap.get(msg.sender_id.toString()) ?? null,
+        receiver: profileMap.get(msg.receiver_id.toString()) ?? null
+    }));
+}
 
 export async function getUserChats(userId: string): Promise<QueryResult<[string, number][]>> {
-    const users = await usersCollection();
-    if (!users) return { success: false, error: 'Failed to connect to database' };
-
+    const col = await messagesCollection();
+    if (!col) return { success: false, error: 'Failed to connect to database' };
     try {
-        const docs = await users.find({}, { projection: { _id: 1, sent_messages: 1 } }).toArray();
+        const oid = toObjectId(userId);
+        const idMatch = oid
+            ? { $or: [{ sender_id: oid }, { sender_id: userId }, { receiver_id: oid }, { receiver_id: userId }] }
+            : { $or: [{ sender_id: userId }, { receiver_id: userId }] };
+
+        const docs = await col.find(idMatch, { projection: { sender_id: 1, receiver_id: 1, read: 1 } }).toArray();
         const counts = new Map<string, number>();
 
-        for (const sender of docs) {
-            const senderId = userIdentifier(sender);
-            const sentMessages = sender.sent_messages ?? [];
-            sentMessages.forEach((message: MongoDoc) => {
-                const receiverId = String(message.receiver_id ?? '');
-                if (!receiverId) return;
+        for (const msg of docs) {
+            const sid = String(msg.sender_id ?? '');
+            const rid = String(msg.receiver_id ?? '');
+            const isSender = sid === userId || (oid && sid === String(oid));
+            const isReceiver = rid === userId || (oid && rid === String(oid));
 
-                if (senderId === userId) {
-                    if (!counts.has(receiverId)) counts.set(receiverId, 0);
-                    return;
-                }
-
-                if (receiverId === userId) {
-                    if (!counts.has(senderId)) counts.set(senderId, 0);
-                    if (isUnreadValue(message.read)) {
-                        counts.set(senderId, counts.get(senderId)! + 1);
-                    }
-                }
-            });
+            if (isSender) {
+                if (!counts.has(rid)) counts.set(rid, 0);
+            } else if (isReceiver) {
+                if (!counts.has(sid)) counts.set(sid, 0);
+                if (isUnread(msg.read)) counts.set(sid, counts.get(sid)! + 1);
+            }
         }
 
-        const result: [string, number][] = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
-        return { success: true, data: result };
-    } catch (error) {
-        return { success: false, error: (error as Error).message };
+        return { success: true, data: Array.from(counts.entries()).sort((a, b) => b[1] - a[1]) };
+    } catch (e) {
+        return { success: false, error: (e as Error).message };
     }
 }
 
 export async function getChatMessages(from_id: string, to_id: string): Promise<QueryResult> {
-    const users = await usersCollection();
-    if (!users) return { success: false, error: 'Failed to connect to database' };
-
+    const col = await messagesCollection();
+    if (!col) return { success: false, error: 'Failed to connect to database' };
     try {
-        const fromObjectId = toObjectId(from_id);
-        const toObjectIdValue = toObjectId(to_id);
-        if (!fromObjectId || !toObjectIdValue) return { success: true, data: [] };
+        const fromOid = toObjectId(from_id);
+        const toOid = toObjectId(to_id);
 
-        const docs = await users.find(
-            { _id: { $in: [fromObjectId, toObjectIdValue] } },
-            { projection: { _id: 1, sent_messages: 1 } }
-        ).toArray();
+        const senderValues = [from_id, ...(fromOid ? [fromOid] : [])];
+        const receiverValues = [to_id, ...(toOid ? [toOid] : [])];
 
-        const rows: Message[] = [];
-        for (const sender of docs) {
-            const senderId = userIdentifier(sender);
-            const sentMessages = sender.sent_messages ?? [];
-            sentMessages.forEach((message: MongoDoc, index: number) => {
-                const receiverId = String(message.receiver_id ?? '');
-                const isPair =
-                    (senderId === from_id && receiverId === to_id) ||
-                    (senderId === to_id && receiverId === from_id);
+        const docs = await col.find({
+            $or: [
+                { sender_id: { $in: senderValues }, receiver_id: { $in: receiverValues } },
+                { sender_id: { $in: receiverValues }, receiver_id: { $in: senderValues } }
+            ]
+        }).sort({ sent_at: 1 }).toArray();
 
-                if (!isPair) return;
-                rows.push(rowToMessage(normalizeMessageRow(sender as MongoDoc, message, index)));
-            });
-        }
+        const messages = docs.map(d => rowToMessage(normalizeMessage(d)));
 
-        rows.sort((a, b) => new Date(a.sent_at).getTime() - new Date(b.sent_at).getTime());
-        return { success: true, data: rows };
-    } catch (error) {
-        return { success: false, error: (error as Error).message };
+        // Mark messages sent to from_id as read
+        await markMessagesAsRead(to_id, from_id);
+
+        return { success: true, data: messages };
+    } catch (e) {
+        return { success: false, error: (e as Error).message };
+    }
+}
+
+export async function markMessagesAsRead(senderId: string, receiverId: string): Promise<QueryResult> {
+    const col = await messagesCollection();
+    if (!col) return { success: false, error: 'Failed to connect to database' };
+    try {
+        const senderOid = toObjectId(senderId);
+        const receiverOid = toObjectId(receiverId);
+
+        const senderValues = [senderId, ...(senderOid ? [senderOid] : [])];
+        const receiverValues = [receiverId, ...(receiverOid ? [receiverOid] : [])];
+
+        const result = await col.updateMany(
+            { sender_id: { $in: senderValues }, receiver_id: { $in: receiverValues } },
+            { $set: { read: 'True' } }
+        );
+        return { success: true, data: { affected: result.modifiedCount } };
+    } catch (e) {
+        return { success: false, error: (e as Error).message };
     }
 }
 
 export async function sendMessage(message: Message): Promise<QueryResult> {
-    const users = await usersCollection();
-    if (!users) return { success: false, error: 'Failed to connect to database' };
-
+    const col = await messagesCollection();
+    if (!col) return { success: false, error: 'Failed to connect to database' };
     try {
-        const senderObjectId = toObjectId(message.sender_id);
-        if (!senderObjectId) return { success: false, error: 'Invalid sender id' };
-
-        const payload = {
-            message_id: message.message_id || new UUID().toString(),
-            receiver_id: message.receiver_id,
+        const senderOid = toObjectId(message.sender_id);
+        const receiverOid = toObjectId(message.receiver_id);
+        const doc = {
+            sender_id: senderOid ?? message.sender_id,
+            receiver_id: receiverOid ?? message.receiver_id,
             content: message.content,
             sent_at: message.sent_at,
-            read: message.read
+            read: message.read ?? 'False'
         };
-
-        const result = await users.updateOne(
-            { _id: senderObjectId },
-            { $push: { sent_messages: payload } as any }
-        );
-
-        if (result.matchedCount === 0) {
-            return { success: false, error: 'Sender user not found' };
-        }
-
-        return { success: true, data: { affected: result.modifiedCount } };
-    } catch (error) {
-        return { success: false, error: (error as Error).message };
+        const result = await col.insertOne(doc);
+        return { success: true, data: { affected: result.acknowledged ? 1 : 0 } };
+    } catch (e) {
+        return { success: false, error: (e as Error).message };
     }
 }
 
 export async function getUnreadMessageCount(userId: string): Promise<number> {
-    const users = await usersCollection();
-    if (!users) return 0;
-
+    const col = await messagesCollection();
+    if (!col) return 0;
     try {
-        const docs = await users.find({}, { projection: { sent_messages: 1 } }).toArray();
-        let unreadCount = 0;
-
-        for (const sender of docs) {
-            const sentMessages = sender.sent_messages ?? [];
-            sentMessages.forEach((message: MongoDoc) => {
-                if (String(message.receiver_id ?? '') === userId && isUnreadValue(message.read)) {
-                    unreadCount += 1;
-                }
-            });
-        }
-
-        return unreadCount;
-    } catch (error) {
+        const oid = toObjectId(userId);
+        const receiverValues = [userId, ...(oid ? [oid] : [])];
+        const docs = await col.find(
+            { receiver_id: { $in: receiverValues } },
+            { projection: { read: 1 } }
+        ).toArray();
+        return docs.filter(d => isUnread(d.read)).length;
+    } catch {
         return 0;
     }
 }
