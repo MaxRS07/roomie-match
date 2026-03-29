@@ -32,5 +32,5 @@ Queries/ - contains all queries with titles and descriptions as markdown
 Schemas/ - contains document schemas and the corre
 
 # Links
-- ## (Video Demo)[https://youtu.be/b99GpZpWbyg]
-- ## (ERD & UML)[https://lucid.app/lucidchart/4a6c9e78-f4b4-46f5-9289-72106dd7cd9b/edit?invitationId=inv_93d4c3f4-1932-4f11-a77c-26275a2647cf]
+- ## [Video Demo (Youtube)](https://youtu.be/b99GpZpWbyg)
+- ## [ERD & UML (LucidChart)](https://lucid.app/lucidchart/4a6c9e78-f4b4-46f5-9289-72106dd7cd9b/edit?invitationId=inv_93d4c3f4-1932-4f11-a77c-26275a2647cf)
