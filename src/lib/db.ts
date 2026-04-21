@@ -5,6 +5,7 @@ const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? '/api'
 
 async function apiRequest<T = any>(path: string, init?: RequestInit): Promise<T> {
     const response = await fetch(`${API_BASE}${path}`, {
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
         ...init,
     });
@@ -89,19 +90,12 @@ export async function authenticateUser(email: string, password: string): Promise
 }
 
 export async function getCurrentUser(): Promise<User | null> {
-    const authToken = localStorage.getItem('authToken');
-    if (!authToken) return null;
-
-    const cached = localStorage.getItem('user:' + authToken);
-    if (cached) return JSON.parse(cached) as User;
-
-    const result = await getUserById(authToken);
-    if (result.success && result.data && result.data.length > 0) {
-        const user = result.data[0]!;
-        localStorage.setItem('user:' + authToken, JSON.stringify(user));
-        return user;
+    try {
+        const data = await apiRequest<User>('/session/me');
+        return data ?? null;
+    } catch {
+        return null;
     }
-    return null;
 }
 
 export async function getUserPreferences(userId: string): Promise<QueryResult> {

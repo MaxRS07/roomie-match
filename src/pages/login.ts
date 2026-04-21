@@ -24,8 +24,6 @@ export const LoginPage = {
             authenticateUser('dsteynor0@mysql.com', '$2a$04$di9TDfadKUkdFJSlZVZyhO0hDGa42Y1skGrueD9ILj.OHjtqBVI7a').then(result => {
                 console.log(result);
                 if (result.success) {
-                    localStorage.setItem('authToken', String(result.data.user_id));
-                    localStorage.setItem('user:' + result.data.user_id, JSON.stringify(result.data));
                     router.navigate('dashboard');
                 } else {
                     setLoginError(`Guest login failed: ${result.error ?? 'Unknown error'}`);
@@ -46,8 +44,6 @@ async function handleLogin(e: Event) {
 
     authenticateUser(email, password).then(result => {
         if (result.success) {
-            localStorage.setItem('authToken', String(result.data.user_id));
-            localStorage.setItem('user:' + result.data.user_id, JSON.stringify(result.data));
             router.navigate('dashboard');
         } else {
             setLoginError(result.error ? `Login failed: ${result.error}` : 'Login failed');

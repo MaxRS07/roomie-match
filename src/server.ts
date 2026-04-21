@@ -1,5 +1,7 @@
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
+import { setSession, getSession, deleteSession } from '../Redis/sessionCache.ts';
 import {
     getAllUsers,
     getUserById,
@@ -25,8 +27,12 @@ import {
 } from './lib/db.server.ts';
 
 const app = express();
-app.use(cors());
+app.use(cors({
+    origin: process.env.CLIENT_ORIGIN ?? 'http://localhost:5173',
+    credentials: true,
+}));
 app.use(express.json());
+app.use(cookieParser());
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -83,10 +89,31 @@ app.post('/api/auth/authenticate', async (req, res) => {
     const { email, password } = req.body ?? {};
     const result = await authenticateUser(email, password);
     if (result.success) {
+        await setSession(String(result.data.user_id), result.data);
+        res.cookie('sessionId', String(result.data.user_id), {
+            httpOnly: true,
+            sameSite: 'lax',
+            maxAge: 7 * 24 * 60 * 60 * 1000,
+        });
         res.json(result.data);
     } else {
         res.status(401).json({ error: result.error });
     }
+});
+
+app.get('/api/session/me', async (req, res) => {
+    const userId = req.cookies?.sessionId;
+    if (!userId) return res.status(401).json({ error: 'Not authenticated' });
+    const user = await getSession(userId);
+    if (!user) return res.status(401).json({ error: 'Session expired' });
+    res.json(user);
+});
+
+app.delete('/api/session', async (req, res) => {
+    const userId = req.cookies?.sessionId;
+    if (userId) await deleteSession(userId);
+    res.clearCookie('sessionId');
+    res.json({ success: true });
 });
 
 app.put('/api/users/:id/profile', async (req, res) => {

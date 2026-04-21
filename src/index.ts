@@ -28,21 +28,20 @@ const getPageFromPath = () => {
     const path = window.location.pathname;
     const segments = path.split('/').filter(Boolean);
     const pageName = segments[0] || '';
-
     const validPages = ['login', 'dashboard', 'matches', 'messages', 'profile'];
-    if (validPages.includes(pageName)) {
-        return pageName as any;
-    }
-
-    const token = localStorage.getItem('authToken');
-    return token ? 'dashboard' : 'login';
+    return validPages.includes(pageName) ? (pageName as any) : 'login';
 };
 
-const token = localStorage.getItem('authToken');
-const initialPage = getPageFromPath();
+(async () => {
+    const page = getPageFromPath();
+    const sessionRes = await fetch('/api/session/me', { credentials: 'include' }).catch(() => null);
+    const isLoggedIn = sessionRes?.ok ?? false;
 
-if (!token && initialPage !== 'login' && initialPage !== 'notfound') {
-    router.navigate('login');
-} else {
-    router.navigate(initialPage);
-}
+    if (!isLoggedIn) {
+        router.navigate('login');
+    } else if (page === 'login') {
+        router.navigate('dashboard');
+    } else {
+        router.navigate(page);
+    }
+})();

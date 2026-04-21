@@ -87,8 +87,8 @@ export const Header = {
 
             // Profile dropdown logout handler
             state.dropdownLogoutHandler = () => {
-                localStorage.removeItem('authToken');
-                router.navigate('login');
+                fetch('/api/session', { method: 'DELETE', credentials: 'include' })
+                    .finally(() => router.navigate('login'));
             };
             const dropdownLogoutBtn = document.getElementById('dropdown-logout');
             if (dropdownLogoutBtn) {
