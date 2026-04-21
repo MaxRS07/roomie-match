@@ -11,7 +11,7 @@ client.on('error', (err) => {
 
 let _connected = false;
 
-const getClient = async () => {
+export const getClient = async () => {
     if (!_connected) {
         await client.connect();
         _connected = true;
