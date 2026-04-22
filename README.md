@@ -66,7 +66,7 @@ The `Redis/` folder contains all in-memory caching logic built on top of the Mon
 2. The server connects to `redis://localhost:6379` by default. Override with `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` env vars.
 
 # Links
-- ## [Video Demo (Youtube)](https://youtu.be/b99GpZpWbyg)
+- ## [Video Demo (Youtube)](https://www.youtube.com/watch?v=vMWrUBoS8yA)
 - ## [ERD & UML (LucidChart)](https://lucid.app/lucidchart/4a6c9e78-f4b4-46f5-9289-72106dd7cd9b/edit?invitationId=inv_93d4c3f4-1932-4f11-a77c-26275a2647cf)
 
 ## AI Disclosure
