@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C /Users/zain/roomie-match log --oneline -5)"
+    ]
+  }
+}

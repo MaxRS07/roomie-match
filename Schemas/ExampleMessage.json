@@ -1,0 +1,14 @@
+{
+    "_id": {
+        "$oid": "69c6ccce74d407f38607da6f"
+    },
+    "sender_id": {
+        "$oid": "69c6ccce74d407f38607d9f8"
+    },
+    "receiver_id": {
+        "$oid": "69c6ccce74d407f38607da14"
+    },
+    "content": "cultivate next-generation eyeballs",
+    "sent_at": "11/6/2022",
+    "read": "False"
+}
